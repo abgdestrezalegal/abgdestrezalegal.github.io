@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Destreza Legal</title>
+<meta name="description" content="Gestión de procesos, agenda, clientes y honorarios de Destreza Legal Abogados.">
+<meta name="theme-color" content="#161B20">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Destreza Legal">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <aside class="side" aria-label="Navegación">
+    <div class="brand"><div class="seal">DL</div><b>Destreza Legal</b><span>Abogados · Gestión</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot" id="me"><span>Conectando…</span></div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div class="seg" id="firmSeg" role="group" aria-label="Firma"></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Buscar cliente, código, radicado o despacho" autocomplete="off" aria-label="Buscar">
+        <kbd>/</kbd>
+        <div class="results" id="results" hidden></div>
+      </div>
+      <span class="sync" id="sync" aria-live="polite"></span>
+      <div class="top-actions">
+        <button class="btn" data-act="update-app" id="btnUpdate" hidden title="Hay una versión nueva">Actualizar app</button>
+        <button class="btn" data-act="install" id="btnInstall" hidden><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 8v7m0 0-3-3m3 3 3-3"/></svg><span class="lbl">Instalar</span></button>
+        <button class="btn" data-act="export" id="btnExport" title="Exportar todo a Excel"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg><span class="lbl">Exportar Excel</span></button>
+        <button class="btn primary" data-act="new-menu" id="btnNew"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Nuevo</span></button>
+      </div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+<nav class="mobile-nav" id="mnav" aria-label="Navegación"></nav>
+<div id="layer"></div>
+<div id="layer2"></div>
+<div class="tip" id="tip" hidden></div>
+<div id="auth" hidden></div>
+
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

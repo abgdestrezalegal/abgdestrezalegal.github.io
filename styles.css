@@ -365,3 +365,9 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
 .sw input:checked+span{box-shadow:0 0 0 2px var(--gold)}
 .sw-custom input{width:30px;height:30px;padding:0;border:1px dashed var(--line);border-radius:50%;background:none;cursor:pointer}
 @media (max-width:860px){.kpi .v{font-size:30px}.money b{font-size:22px}}
+
+/* Escritorio: barra lateral fija mientras se desplaza el contenido */
+@media (min-width:861px){
+  .app{display:block;height:auto;min-height:100%;padding-left:232px}
+  .side{position:fixed!important;top:0;left:0;bottom:0;width:232px;height:100vh!important;z-index:25}
+}

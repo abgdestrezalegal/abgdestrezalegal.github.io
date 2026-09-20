@@ -1,4 +1,4 @@
-const VERSION = "dl-v2";
+const VERSION = "dl-v3";
 const SHELL = ["./", "./index.html", "./app.js", "./vendor.js", "./styles.css", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./brand/logo.png", "./brand/logo-light.png"];
 const CDN = ["fonts.googleapis.com", "fonts.gstatic.com"];

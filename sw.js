@@ -1,8 +1,11 @@
-const VERSION = "dl-v4";
+const VERSION = "dl-v5";
 const SHELL = ["./", "./index.html", "./app.js", "./vendor.js", "./styles.css", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./brand/logo.png", "./brand/logo-light.png"];
 const CDN = ["fonts.googleapis.com", "fonts.gstatic.com"];
-self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL))); });
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u =>
+    fetch(u, { cache: "reload" }).then(r => r.ok && c.put(u, r)).catch(() => {})))));
+});
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });

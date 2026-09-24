@@ -418,3 +418,4 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
   .rc{font-size:9px;padding:18px}
   .rc-logo{width:110px}
 }
+.rc-sign{display:block;max-height:58px;width:auto;margin:0 0 -4px 6px}

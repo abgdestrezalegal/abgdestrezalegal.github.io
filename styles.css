@@ -206,9 +206,12 @@ select.f,input.f{border:1px solid var(--line);background:var(--surface);border-r
 .cal .it.Término{border-color:var(--danger)}
 .cal .it.done{opacity:.5;text-decoration:line-through}
 .cal .more{font-size:11px;color:var(--ink-3)}
-.check{appearance:none;width:18px;height:18px;border:1.5px solid var(--ink-3);border-radius:5px;display:inline-grid;place-items:center;cursor:pointer;flex:none;margin:2px 0 0;background:var(--surface)}
-.check:checked{background:var(--ok);border-color:var(--ok)}
-.check:checked::after{content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+.check,.fld input.check,.fld input[type=checkbox],.rc-form input[type=checkbox]{appearance:none;-webkit-appearance:none;width:18px;height:18px;min-width:18px;max-width:18px;min-height:18px;padding:0;border:1.5px solid var(--ink-3);border-radius:5px;display:inline-grid;place-items:center;cursor:pointer;flex:none;margin:2px 0 0;background:var(--surface);box-sizing:border-box;font-size:0}
+.check:checked,.fld input[type=checkbox]:checked{background:var(--ok);border-color:var(--ok)}
+.check:checked::after,.fld input[type=checkbox]:checked::after{content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+/* filas de "casilla + texto" dentro de un formulario */
+label.fld.chk{flex-direction:row;gap:9px;align-items:flex-start}
+label.fld.chk>span{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
 .task{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:10px 0;border-top:1px solid var(--line-2);align-items:start}
 .task:first-child{border-top:none}
 .task.done .ev-t{text-decoration:line-through;color:var(--ink-3)}
@@ -324,8 +327,8 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
 .drawer-h h3{font-size:28px}
 .tabs button[aria-selected="true"]{border-color:var(--gold)}
 .progress i{background:var(--gold-grad)}
-.modal{border-radius:8px;overflow:hidden}
-.modal::before{content:"";display:block;height:3px;background:var(--gold-grad)}
+.modal{border-radius:8px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.modal::before{content:"";display:block;height:3px;background:var(--gold-grad);position:sticky;top:0;z-index:4}
 .m-brand{display:none}
 /* pantalla de ingreso */
 #auth{background:#15162C}
@@ -419,3 +422,7 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
   .rc-logo{width:110px}
 }
 .rc-sign{display:block;max-height:58px;width:auto;margin:0 0 -4px 6px}
+@media (min-width:861px){
+  /* la vista previa acompaña al formulario mientras se desplaza la ventana */
+  .rc-prev{position:sticky;top:14px;max-height:calc(100vh - 150px)}
+}

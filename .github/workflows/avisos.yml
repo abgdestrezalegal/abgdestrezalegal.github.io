@@ -1,0 +1,26 @@
+name: Avisos de la agenda
+
+# 11:30 UTC = 6:30 a. m. en Colombia. Colombia no cambia de hora, así que la hora local no se mueve.
+on:
+  schedule:
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+    inputs:
+      ensayo:
+        description: "Ensayo: muestra los avisos sin enviarlos"
+        type: boolean
+        default: false
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Enviar los avisos del día
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          DRY_RUN: ${{ inputs.ensayo && '1' || '0' }}
+        run: node scripts/avisos.mjs

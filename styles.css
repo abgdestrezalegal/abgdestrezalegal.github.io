@@ -422,6 +422,13 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
   .rc-logo{width:110px}
 }
 .rc-sign{display:block;max-height:58px;width:auto;margin:0 0 -4px 6px}
+/* informe ejecutivo: reusa la hoja del recibo con un poco más de aire */
+.rc.inf{font-size:10px}
+.rc.inf .rc-tbl{font-size:9px}
+.rc.inf .rc-tbl td{padding:6px 8px}
+.rc.inf .rc-tbl td:first-child{white-space:nowrap;color:#4A4C63}
+.inf-res{margin:2px 0 0;text-align:justify;line-height:1.55}
+.rc.inf .rc-grid2 div{margin-bottom:2px}
 @media (min-width:861px){
   /* la vista previa acompaña al formulario mientras se desplaza la ventana */
   .rc-prev{position:sticky;top:14px;max-height:calc(100vh - 150px)}

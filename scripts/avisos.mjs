@@ -1,15 +1,11 @@
 /* Avisos diarios de la agenda — Destreza Legal Abogados
    Lo ejecuta GitHub Actions una vez al día. Lee la agenda en Firestore y envía
-   notificaciones push a los dispositivos registrados. Sin dependencias externas:
-   firma el JWT con node:crypto y habla directo con las APIs REST de Google.
-
-   Reglas que pidió la firma:
-     · Audiencias, diligencias y reuniones → un aviso la víspera y otro el mismo día.
-     · Términos → un aviso diario desde que se agendan hasta el día del vencimiento
-       (y uno más si ya venció y sigue abierto).
-     · Tareas y gestiones → un aviso el mismo día.
+   UNA notificación con todo lo del día a cada dispositivo registrado.
+   Sin dependencias externas: firma el JWT con node:crypto y habla directo
+   con las APIs REST de Google. Las reglas viven en reglas.mjs, compartidas con la app.
 */
 import crypto from "node:crypto";
+import { avisosDelDia, resumenDiario } from "./reglas.mjs";
 
 const SA = JSON.parse(process.env.FIREBASE_SA || "{}");
 const PID = SA.project_id;
@@ -66,49 +62,10 @@ async function borrarToken(tk, id) {
   await fetch(`${RAIZ()}/tokens/${encodeURIComponent(id)}`, { method: "DELETE", headers: { authorization: "Bearer " + tk } }).catch(() => {});
 }
 
-/* ---- fechas en hora de Colombia ---- */
 const hoyBogota = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-const sumar = (s, n) => { const [y, m, d] = s.split("-").map(Number); const x = new Date(Date.UTC(y, m - 1, d + n)); return x.toISOString().slice(0, 10); };
-const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const fmt = s => { const [y, m, d] = String(s).split("-").map(Number); return `${d} ${MES[m - 1]} ${y}`; };
-const hora12 = h => { if (!h) return ""; const [H, M] = h.split(":").map(Number); return ` ${((H + 11) % 12) + 1}:${String(M).padStart(2, "0")} ${H >= 12 ? "p. m." : "a. m."}`; };
-const dias = (a, b) => Math.round((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 864e5);
-
-const abierta = t => t.estado !== "Completada" && t.estado !== "Cancelada";
-
-/** Devuelve los avisos que corresponden a hoy. */
-export function avisosDelDia(tareas, casos, hoy) {
-  const manana = sumar(hoy, 1);
-  const av = [];
-  for (const t of tareas) {
-    if (!abierta(t) || !t.fecha) continue;
-    const c = casos[t.casoId] || {};
-    const quien = c.clienteNombre ? `${c.codigo || ""} · ${c.clienteNombre}` : (c.codigo || "");
-    const donde = t.lugar ? ` · ${t.lugar}` : "";
-    const cuerpo = `${t.titulo || ""}${hora12(t.hora)}${donde}${quien ? `\n${quien}` : ""}`;
-    const tipo = t.tipo;
-
-    if (tipo === "Audiencia" || tipo === "Reunión" || tipo === "Diligencia") {
-      if (t.fecha === hoy) av.push({ clave: `ev-${t.id}`, titulo: `Hoy · ${tipo}`, cuerpo, orden: 1, fecha: t.fecha });
-      else if (t.fecha === manana) av.push({ clave: `ev-${t.id}`, titulo: `Mañana · ${tipo}`, cuerpo, orden: 2, fecha: t.fecha });
-    } else if (tipo === "Término") {
-      const desde = String(t.creado || "").slice(0, 10) || hoy;   // desde que el término se agendó
-      if (hoy <= t.fecha && hoy >= desde) {
-        const faltan = dias(t.fecha, hoy);
-        const cuando = faltan === 0 ? "Vence hoy" : faltan === 1 ? "Vence mañana" : `Faltan ${faltan} días`;
-        av.push({ clave: `tm-${t.id}`, titulo: `Término · ${cuando}`, cuerpo: `${t.titulo || ""} — vence el ${fmt(t.fecha)}${quien ? `\n${quien}` : ""}`, orden: faltan === 0 ? 0 : 3, fecha: t.fecha });
-      } else if (t.fecha < hoy) {
-        av.push({ clave: `tm-${t.id}`, titulo: `Término vencido el ${fmt(t.fecha)}`, cuerpo: `${t.titulo || ""}${quien ? `\n${quien}` : ""}`, orden: 0, fecha: t.fecha });
-      }
-    } else if (tipo === "Tarea") {
-      if (t.fecha === hoy) av.push({ clave: `ta-${t.id}`, titulo: "Hoy · Gestión", cuerpo, orden: 4, fecha: t.fecha });
-    }
-  }
-  return av.sort((a, b) => a.orden - b.orden || (a.fecha || "").localeCompare(b.fecha || ""));
-}
 
 /* ---- envío ---- */
-async function enviar(tk, destino, titulo, cuerpo, clave) {
+async function enviar(tk, destino, { titulo, cuerpo, clave }) {
   const r = await fetch(`https://fcm.googleapis.com/v1/projects/${PID}/messages:send`, {
     method: "POST", headers: { authorization: "Bearer " + tk, "content-type": "application/json" },
     body: JSON.stringify({
@@ -117,17 +74,17 @@ async function enviar(tk, destino, titulo, cuerpo, clave) {
         data: { title: titulo, body: cuerpo, tag: clave, url: "./" },
         webpush: {
           headers: { Urgency: "high", TTL: "86400" },
-          notification: { title: titulo, body: cuerpo, tag: clave, icon: "icons/icon-192.png", badge: "icons/icon-192.png" },
           fcm_options: { link: "https://abgdestrezalegal.github.io/" }
         }
       }
     })
   });
-  if (r.ok) return "ok";
   const txt = await r.text();
-  if (/UNREGISTERED|NOT_FOUND|INVALID_ARGUMENT/.test(txt)) return "muerto";
-  console.warn("Envío fallido:", r.status, txt.slice(0, 300));
-  return "error";
+  if (r.ok) { let id = ""; try { id = JSON.parse(txt).name || ""; } catch (_) {} return { ok: true, id }; }
+  // Solo se da de baja un dispositivo cuando FCM dice que el registro ya no existe.
+  // Un error de formato no debe costarle el registro a un aparato que sí funciona.
+  const muerto = /UNREGISTERED|NOT_FOUND/.test(txt);
+  return { ok: false, muerto, detalle: txt.slice(0, 300) };
 }
 
 async function main() {
@@ -137,20 +94,21 @@ async function main() {
   const casos = Object.fromEntries(casosArr.map(c => [c.id, c]));
   const av = avisosDelDia(tareas, casos, hoy);
 
-  console.log(`${hoy} · ${av.length} aviso(s) · ${tokens.length} dispositivo(s)`);
-  av.forEach(a => console.log(` - ${a.titulo}: ${a.cuerpo.replace(/\n/g, " | ")}`));
-  if (!av.length || !tokens.length || SECO) return;
+  console.log(`${hoy} · ${tareas.length} tareas leídas · ${av.length} aviso(s) · ${tokens.length} dispositivo(s)`);
+  av.forEach(a => console.log(` - ${a.titulo}: ${a.linea}${a.quien ? ` (${a.quien})` : ""}`));
+  tokens.forEach(d => console.log(` · dispositivo: ${d.dispositivo || "?"} — ${d.email || "?"} — registrado ${String(d.actualizado || "").slice(0, 10)}`));
 
-  // Si el día viene cargado, un solo resumen en vez de llenar la pantalla de avisos.
-  const lotes = av.length > 5
-    ? [{ clave: `resumen-${hoy}`, titulo: `Agenda de hoy · ${av.length} asuntos`, cuerpo: av.slice(0, 6).map(a => `• ${a.titulo}: ${a.cuerpo.split("\n")[0]}`).join("\n") }]
-    : av;
+  const msg = resumenDiario(av, hoy);
+  if (!msg) { console.log("Nada que avisar hoy."); return; }
+  console.log(`\nAviso del día:\n  ${msg.titulo}\n  ${msg.cuerpo.replace(/\n/g, "\n  ")}`);
+  if (SECO) { console.log("\n(Ensayo: no se envió nada.)"); return; }
+  if (!tokens.length) { console.log("\nNo hay dispositivos registrados."); return; }
 
   for (const d of tokens) {
-    for (const a of lotes) {
-      const r = await enviar(tk, d.id, a.titulo, a.cuerpo, a.clave);
-      if (r === "muerto") { await borrarToken(tk, d.id); break; }
-    }
+    const r = await enviar(tk, d.id, msg);
+    if (r.ok) console.log(`Enviado a ${d.dispositivo || d.email} · ${r.id}`);
+    else if (r.muerto) { await borrarToken(tk, d.id); console.log(`Dado de baja ${d.dispositivo || d.email}: el dispositivo ya no está registrado.`); }
+    else console.warn(`Falló el envío a ${d.dispositivo || d.email}: ${r.detalle}`);
   }
   console.log("Listo.");
 }

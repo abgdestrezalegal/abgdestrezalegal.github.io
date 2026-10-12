@@ -1,0 +1,6 @@
+# Configuración del conector de Destreza Legal para Cloudflare Workers.
+# Los secretos (FIREBASE_SA, TOKEN_SECRET, CLAVE_ACCESO) NO van aquí:
+# se cargan en el panel de Cloudflare, cifrados.
+name = "destreza-legal-conector"
+main = "worker.js"
+compatibility_date = "2026-10-01"

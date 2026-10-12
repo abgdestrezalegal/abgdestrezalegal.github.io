@@ -66,7 +66,9 @@ export const aCampos = o => Object.fromEntries(Object.entries(o).map(([k, v]) =>
 
 /* ---------- operaciones ---------- */
 export class Firestore {
-  constructor(sa, fetchImpl) { this.sa = sa; this.pid = sa.project_id; this.f = fetchImpl || fetch; }
+  /* fetch se envuelve en una función propia: guardarlo suelto en una propiedad lo
+     desliga de su objeto y Cloudflare lo rechaza ("Illegal invocation"). */
+  constructor(sa, fetchImpl) { this.sa = sa; this.pid = sa.project_id; this.f = fetchImpl || ((u, o) => fetch(u, o)); }
   get raiz() { return `https://firestore.googleapis.com/v1/projects/${this.pid}/databases/(default)/documents`; }
   async cab() { return { authorization: "Bearer " + (await tokenGoogle(this.sa)), "content-type": "application/json" }; }
 

@@ -57,6 +57,12 @@
 <script>/* Pantalla fija al 100 %: sin pellizcar ni doble toque para ampliar */
 ["gesturestart","gesturechange"].forEach(function(t){document.addEventListener(t,function(e){e.preventDefault()},{passive:false})});
 </script>
+<script>/* En celular las tablas se muestran como fichas: cada dato lleva el nombre de su columna */
+(function(){var SIN=/^(c\u00f3digo|cliente y asunto|cliente|proceso|)$/i;
+function rotular(){document.querySelectorAll("#content table.tbl").forEach(function(t){var th=[].map.call(t.querySelectorAll("thead th"),function(h){return h.textContent.trim()});if(!th.length)return;
+t.querySelectorAll("tbody tr").forEach(function(tr){[].forEach.call(tr.children,function(td,i){if(td.colSpan>1||SIN.test(th[i]||""))return;if(td.getAttribute("data-label")!==th[i])td.setAttribute("data-label",th[i])})})})}
+var c=document.getElementById("content");if(c)new MutationObserver(rotular).observe(c,{childList:true,subtree:true});})();
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

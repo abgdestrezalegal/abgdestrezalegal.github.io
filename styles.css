@@ -433,3 +433,26 @@ h2::before{content:"";width:18px;height:2px;background:var(--gold-grad);border-r
   /* la vista previa acompaña al formulario mientras se desplaza la ventana */
   .rc-prev{position:sticky;top:14px;max-height:calc(100vh - 150px)}
 }
+
+/* ===== Ajustes de celular (oct 2026): proporciones, textos largos y zoom fijo ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-x pan-y}
+.main,.content,.panel,.panel-b,.grid>*,.kpi{min-width:0}
+/* Los textos largos (enlaces de audiencias, radicados, correos) se parten dentro de su recuadro */
+.ev{grid-template-columns:62px minmax(0,1fr) auto}
+.task{grid-template-columns:auto minmax(0,1fr) auto}
+.ev-t,.ev-m,.ev-m>*,.task>div,.kv dd,.content p,.content li,.chip{overflow-wrap:anywhere}
+.ev-m>*{min-width:0;max-width:100%}
+.content table,.content .tbl-wrap{overflow-wrap:normal}
+.modal-form>.wide{grid-column:1/-1}
+@media (max-width:860px){
+  html,body{overflow-x:clip}
+  .ev{grid-template-columns:52px minmax(0,1fr) auto;gap:10px}
+  .rel{font-size:11.5px}
+  .g-2{grid-template-columns:minmax(0,1fr)}
+  /* Calculadora de términos: una columna, campos parejos */
+  #tn{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}
+  #tn .fld{min-width:0}
+  #tn .fld>div{display:grid!important;grid-template-columns:96px minmax(0,1fr);gap:8px}
+  #tn input[type=date],#tn input[type=number],#tn select{width:100%!important;min-width:0;box-sizing:border-box;height:44px}
+  #tn label.fld.chk{align-items:flex-start}
+}

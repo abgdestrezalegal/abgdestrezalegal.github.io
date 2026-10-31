@@ -456,3 +456,29 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-x pan-
   #tn input[type=date],#tn input[type=number],#tn select{width:100%!important;min-width:0;box-sizing:border-box;height:44px}
   #tn label.fld.chk{align-items:flex-start}
 }
+/* ===== Celular (nov 2026): fechas dentro del margen y tablas como fichas ===== */
+@media (max-width:860px){
+  /* iOS dibuja las fechas con un ancho propio que se sale del recuadro */
+  input[type=date],input[type=time],input[type=month],input[type=datetime-local]{-webkit-appearance:none;appearance:none;display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;min-height:44px;text-align:left}
+  input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
+  .f[type=date]{width:auto;max-width:100%}
+  .mobile-nav button{flex:1 1 0;min-width:0;padding:4px 2px;text-align:center}
+  /* Procesos, Clientes y demás listados: una ficha por fila, sin desplazamiento lateral */
+  .content .tbl-wrap{overflow-x:visible}
+  .content .tbl,.content .tbl tbody{display:block;width:100%}
+  .content .tbl thead{display:none}
+  .content .tbl tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;padding:14px 16px;border-bottom:1px solid var(--line-2)}
+  .content .tbl tr:last-child{border-bottom:0}
+  .content .tbl td{display:block;grid-column:1/-1;padding:0;border:0;min-width:0;text-align:left!important;overflow-wrap:anywhere}
+  .content .tbl td.r{grid-column:auto}
+  .content .tbl td.hide-m{display:none}
+  .content .tbl td[data-label]::before{content:attr(data-label);display:block;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+  .content .tbl .sub{max-width:none}
+  /* Gráfico de cobros: las etiquetas de los meses caben en el recuadro */
+  .col-x{grid-auto-columns:minmax(0,1fr)!important}
+  .cols{grid-auto-columns:minmax(0,1fr)!important}
+  .col-x span{flex:1 1 0;min-width:0;font-size:9.5px!important;text-align:center;overflow:hidden}
+  /* Filtros parejos: todos del mismo ancho */
+  .filters{display:grid!important;grid-template-columns:minmax(0,1fr);gap:8px}
+  .filters .f,.filters select,.filters input{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+}

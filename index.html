@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Destreza Legal</title>
 <meta name="description" content="Gestión de procesos, agenda, clientes y honorarios de Destreza Legal Abogados.">
 <meta name="theme-color" content="#15162C">
@@ -54,6 +54,9 @@
 <div id="auth" hidden></div>
 
 
+<script>/* Pantalla fija al 100 %: sin pellizcar ni doble toque para ampliar */
+["gesturestart","gesturechange"].forEach(function(t){document.addEventListener(t,function(e){e.preventDefault()},{passive:false})});
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

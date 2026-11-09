@@ -10,6 +10,7 @@ import { avisosDelDia, resumenDiario } from "./reglas.mjs";
 const SA = JSON.parse(process.env.FIREBASE_SA || "{}");
 const PID = SA.project_id;
 const SECO = process.env.DRY_RUN === "1";            // ensayo: no envía nada
+const APP_URL = process.env.APP_URL || "https://abgdestrezalegal.github.io/";  // a dónde lleva el aviso al tocarlo
 if (!PID) { console.error("Falta el secreto FIREBASE_SA."); process.exit(1); }
 
 const SCOPES = "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging";
@@ -74,7 +75,7 @@ async function enviar(tk, destino, { titulo, cuerpo, clave }) {
         data: { title: titulo, body: cuerpo, tag: clave, url: "./" },
         webpush: {
           headers: { Urgency: "high", TTL: "86400" },
-          fcm_options: { link: "https://abgdestrezalegal.github.io/" }
+          fcm_options: { link: APP_URL }
         }
       }
     })
@@ -87,30 +88,39 @@ async function enviar(tk, destino, { titulo, cuerpo, clave }) {
   return { ok: false, muerto, detalle: txt.slice(0, 300) };
 }
 
+/* Licencia: si config/licencia dice activa == false, el servicio está suspendido y no se avisa. */
+async function suspendido(tk) {
+  const r = await fetch(`${RAIZ()}/config/licencia`, { headers: { authorization: "Bearer " + tk } });
+  if (!r.ok) return false;   // sin documento de licencia: servicio activo
+  const j = await r.json();
+  return j.fields?.activa?.booleanValue === false;
+}
+
 async function main() {
   const tk = await token();
+  if (await suspendido(tk)) { console.log("Servicio suspendido: hoy no se envían avisos."); return; }
   const hoy = hoyBogota();
   const [tareas, casosArr, tokens] = await Promise.all([leer(tk, "tareas"), leer(tk, "casos"), leer(tk, "tokens")]);
   const casos = Object.fromEntries(casosArr.map(c => [c.id, c]));
   const av = avisosDelDia(tareas, casos, hoy);
 
+  // Este repositorio es público y su registro también: solo se anotan cantidades,
+  // nunca asuntos, clientes ni correos.
   console.log(`${hoy} · ${tareas.length} tareas leídas · ${av.length} aviso(s) · ${tokens.length} dispositivo(s)`);
-  av.forEach(a => console.log(` - ${a.titulo}: ${a.linea}${a.quien ? ` (${a.quien})` : ""}`));
-  tokens.forEach(d => console.log(` · dispositivo: ${d.dispositivo || "?"} — ${d.email || "?"} — registrado ${String(d.actualizado || "").slice(0, 10)}`));
 
   const msg = resumenDiario(av, hoy);
   if (!msg) { console.log("Nada que avisar hoy."); return; }
-  console.log(`\nAviso del día:\n  ${msg.titulo}\n  ${msg.cuerpo.replace(/\n/g, "\n  ")}`);
   if (SECO) { console.log("\n(Ensayo: no se envió nada.)"); return; }
   if (!tokens.length) { console.log("\nNo hay dispositivos registrados."); return; }
 
+  let enviados = 0, bajas = 0, fallos = 0;
   for (const d of tokens) {
     const r = await enviar(tk, d.id, msg);
-    if (r.ok) console.log(`Enviado a ${d.dispositivo || d.email} · ${r.id}`);
-    else if (r.muerto) { await borrarToken(tk, d.id); console.log(`Dado de baja ${d.dispositivo || d.email}: el dispositivo ya no está registrado.`); }
-    else console.warn(`Falló el envío a ${d.dispositivo || d.email}: ${r.detalle}`);
+    if (r.ok) enviados++;
+    else if (r.muerto) { await borrarToken(tk, d.id); bajas++; }
+    else { fallos++; console.warn(`Falló un envío: ${r.detalle}`); }
   }
-  console.log("Listo.");
+  console.log(`Listo: ${enviados} enviado(s), ${bajas} dispositivo(s) dado(s) de baja, ${fallos} fallido(s).`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main().catch(e => { console.error(e); process.exit(1); });

@@ -1,0 +1,30 @@
+name: Avisos de la agenda · SLI
+
+# Mismo servicio de avisos, para la app de Soluciones Legales Integrales (sli-gestion.pages.dev).
+# Usa el secreto FIREBASE_SA_SLI: la cuenta de servicio del proyecto Firebase sli-gestion-8f24f.
+# Si la licencia de SLI está suspendida (config/licencia → activa: false), no envía nada.
+# 11:23 UTC = 6:23 a. m. en Colombia.
+on:
+  schedule:
+    - cron: "23 11 * * *"
+  workflow_dispatch:
+    inputs:
+      ensayo:
+        description: "Ensayo: revisa la agenda sin enviar avisos"
+        type: boolean
+        default: false
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Enviar los avisos del día
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA_SLI }}
+          APP_URL: https://sli-gestion.pages.dev/
+          DRY_RUN: ${{ inputs.ensayo && '1' || '0' }}
+        run: node scripts/avisos.mjs

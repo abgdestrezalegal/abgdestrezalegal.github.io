@@ -1,9 +1,8 @@
 name: Avisos de la agenda
 
-# 11:30 UTC = 6:30 a. m. en Colombia. Colombia no cambia de hora, así que la hora local no se mueve.
+# Lo pone en marcha cada día a las 6:30 a. m. (hora de Colombia) el reloj de Cloudflare
+# "avisos-agenda", que es puntual. El horario propio de GitHub se quitó porque llegaba con horas de retraso.
 on:
-  schedule:
-    - cron: "30 11 * * *"
   workflow_dispatch:
     inputs:
       ensayo:

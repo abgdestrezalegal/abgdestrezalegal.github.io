@@ -3,10 +3,8 @@ name: Avisos de la agenda · SLI
 # Mismo servicio de avisos, para la app de Soluciones Legales Integrales (sli-gestion.pages.dev).
 # Usa el secreto FIREBASE_SA_SLI: la cuenta de servicio del proyecto Firebase sli-gestion-8f24f.
 # Si la licencia de SLI está suspendida (config/licencia → activa: false), no envía nada.
-# 11:23 UTC = 6:23 a. m. en Colombia.
+# Lo pone en marcha cada día a las 6:30 a. m. (hora de Colombia) el reloj de Cloudflare "avisos-agenda".
 on:
-  schedule:
-    - cron: "23 11 * * *"
   workflow_dispatch:
     inputs:
       ensayo:

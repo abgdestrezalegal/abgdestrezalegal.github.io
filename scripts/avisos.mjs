@@ -66,16 +66,16 @@ async function borrarToken(tk, id) {
 const hoyBogota = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 /* ---- envío ---- */
-async function enviar(tk, destino, { titulo, cuerpo, clave }) {
+async function enviar(tk, destino, { titulo, cuerpo, clave, url = "./" }) {
   const r = await fetch(`https://fcm.googleapis.com/v1/projects/${PID}/messages:send`, {
     method: "POST", headers: { authorization: "Bearer " + tk, "content-type": "application/json" },
     body: JSON.stringify({
       message: {
         token: destino,
-        data: { title: titulo, body: cuerpo, tag: clave, url: "./" },
+        data: { title: titulo, body: cuerpo, tag: clave, url },
         webpush: {
           headers: { Urgency: "high", TTL: "86400" },
-          fcm_options: { link: APP_URL }
+          fcm_options: { link: new URL(url, APP_URL).href }
         }
       }
     })
@@ -110,6 +110,8 @@ async function main() {
 
   const msg = resumenDiario(av, hoy);
   if (!msg) { console.log("Nada que avisar hoy."); return; }
+  // Al tocar el aviso se abre la agenda en «Hoy»; si es un solo asunto, se resalta esa tarea.
+  msg.url = av.length === 1 ? `./?ir=agenda&tarea=${encodeURIComponent(av[0].id)}` : "./?ir=agenda";
   if (SECO) { console.log("\n(Ensayo: no se envió nada.)"); return; }
   if (!tokens.length) { console.log("\nNo hay dispositivos registrados."); return; }
 

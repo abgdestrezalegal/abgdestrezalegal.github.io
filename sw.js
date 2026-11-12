@@ -1,4 +1,4 @@
-const VERSION = "dl-v15";
+const VERSION = "dl-v16";
 const SHELL = ["./", "./index.html", "./app.js", "./vendor.js", "./styles.css", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./brand/logo.png", "./brand/logo-light.png"];
 const CDN = ["fonts.googleapis.com", "fonts.gstatic.com"];
@@ -57,7 +57,8 @@ self.addEventListener("notificationclick", e => {
   e.notification.close();
   const destino = new URL(e.notification.data && e.notification.data.url || "./", self.location.origin + self.location.pathname.replace(/sw\.js$/, "")).href;
   e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => {
-    for (const w of ws) if ("focus" in w) return w.focus();
+    // Con la app ya abierta, la lleva a la agenda (sección Hoy) en vez de solo mostrarla.
+    for (const w of ws) if ("focus" in w) { w.postMessage({ tipo: "abrir", url: destino }); return w.focus(); }
     return clients.openWindow(destino);
   }));
 });

@@ -639,7 +639,7 @@
     if (id === "ax-ft") { A.filtro.tipo = ev.target.value; DL.U(); }
     if (id === "ax-fe") { A.filtro.estado = ev.target.value; DL.U(); }
     if (id === "ax-xlsx" && ev.target.files[0]) importar(ev.target.files[0]);
-    if (id === "ax-f-tipo") { const soat = ev.target.value !== "AFP"; $("#ax-w-ent").innerHTML = entidadCampo(ev.target.value, soat ? "" : "Porvenir"); const w = $("#ax-w-soat"); w.hidden = !soat; w.innerHTML = soat ? soatCampos() : ""; }
+    if (id === "ax-f-tipo") { const soat = ev.target.value !== "AFP"; $("#ax-w-ent").innerHTML = entidadCampo(ev.target.value, soat ? "" : "Porvenir"); const w = $("#ax-w-soat"); w.hidden = !soat; const fr = $("#axfrm"), t0 = fr && fr.dataset.k === "editar" && A.tramites[A.abierto]; w.innerHTML = soat ? soatCampos(t0 && t0.tipo !== "AFP" ? t0 : {}) : ""; }
     if (ev.target.closest("#axfrm")) { revisarCapital(); revisarReparto(); }
   });
   document.addEventListener("submit", async ev => {

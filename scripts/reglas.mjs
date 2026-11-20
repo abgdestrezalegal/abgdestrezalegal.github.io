@@ -7,6 +7,8 @@
      · Términos → a diario desde que se agendan hasta el vencimiento,
        y uno más si vencieron sin atenderse.
      · Tareas y gestiones → el mismo día.
+     · Citas de Auxilios y pólizas (radicación ante AFP, etc.) → desde 3 días antes,
+       a diario, hasta el día de la cita, mientras sigan pendientes.
 */
 
 const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -45,6 +47,28 @@ export function avisosDelDia(tareas, casos, hoy) {
     }
   }
   return av.sort((a, b) => a.orden - b.orden || (a.fecha || "").localeCompare(b.fecha || ""));
+}
+
+/** Citas pendientes de los trámites de Auxilios y pólizas (colección auxTramites, campo citas). */
+export const DIAS_AVISO_CITA = 3;
+export function avisosCitas(tramites, hoy) {
+  const av = [];
+  for (const t of tramites || []) {
+    for (const c of t.citas || []) {
+      if (!c || c.estado !== "Pendiente" || !c.fecha) continue;
+      const faltan = difDias(c.fecha, hoy);
+      if (faltan < 0 || faltan > DIAS_AVISO_CITA) continue;
+      const cuando = faltan === 0 ? "Hoy" : faltan === 1 ? "Mañana" : `En ${faltan} días`;
+      const motivo = String(c.motivo || "Radicación").toLowerCase();
+      av.push({
+        id: t.id, cita: c.id, aux: true, clave: `ci-${t.id}-${c.id}`, cuando: faltan === 0 ? "hoy" : "cita",
+        titulo: `${cuando} · Cita de ${motivo}`,
+        linea: `${t.fallecido || ""} (${t.codigo || t.id}) · ${t.entidad || ""}${hora12(c.hora)}${c.lugar ? " · " + c.lugar : ""}${faltan ? " — el " + fmtF(c.fecha) : ""}`,
+        quien: "", orden: faltan === 0 ? 1 : 2, fecha: c.fecha, tipo: "Cita"
+      });
+    }
+  }
+  return av;
 }
 
 /** Un solo aviso para todo el día: iOS y Windows muestran una notificación completa

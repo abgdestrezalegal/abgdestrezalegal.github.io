@@ -750,7 +750,8 @@
 body:not(.ax-on) .ax-top{display:none!important}
 body.ax-on #firmSeg,body.ax-on .top .search:not(.ax-top),body.ax-on #btnExport,body.ax-on #btnNew{display:none!important}
 .ax-top[hidden]{display:none!important}
-.ax-tabs{margin:14px 0 18px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.ax{display:flex;flex-direction:column;gap:22px}
+.ax-tabs{margin:-8px 0 -4px;border-bottom:1px solid var(--line);scrollbar-width:none}
 .ax-tabs::-webkit-scrollbar{display:none}
 .ax-k4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .ax-bar{grid-template-columns:150px minmax(0,1fr) 92px}

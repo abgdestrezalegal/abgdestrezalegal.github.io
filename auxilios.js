@@ -1,4 +1,4 @@
-/* Auxilios funerarios — módulo exclusivo de la app de Destreza Legal.
+/* Auxilios y pólizas (auxilios funerarios AFP, SOAT y ADRES) — módulo exclusivo de la app de Destreza Legal.
    Controla el negocio de la alianza con la Funeraria El Carmen: trámites de auxilio funerario (AFP) y SOAT,
    capital por fondo (Destreza y aliados), cobros, inyecciones y repartos de utilidad.
    Datos en Firestore: auxTramites, auxMovs y auxConfig/general. Solo lo ven el propietario, los administradores
@@ -11,6 +11,9 @@
     AFP: ["Evaluación", "Documentación pendiente", "Lista para radicar", "Radicado", "En revisión", "Aprobado", "Cobrado"],
     SOAT: ["Evaluación", "Documentación pendiente", "Lista para radicar", "Radicado", "En revisión", "Aprobado", "Pagado al cliente", "Cliente pagó a la firma"]
   };
+  ESTADOS.ADRES = ESTADOS.SOAT; // ADRES opera con los mismos lineamientos del SOAT
+  const TIPOS = ["AFP", "SOAT", "ADRES"], PREFIJO = { AFP: "AUX-", SOAT: "SOAT-", ADRES: "ADRES-" };
+  const MOTIVOS = ["Radicación", "Entrega de documentos", "Entrevista o valoración", "Otra"];
   const DESVIOS = ["No aprobado", "En demanda", "Desistido"];
   const ENT_AFP = ["Colpensiones", "Porvenir", "Protección", "Colfondos", "Skandia", "FOMAG", "Otra"];
   const COLORES = ["#A67B42", "#2F6F73", "#7A2E3A", "#3E5A8C", "#5E6B3A", "#6B4E8A"];
@@ -109,7 +112,7 @@
   };
   const guardarCfg = c => DL.b.doc("auxConfig/general").set({ ...cfg(), ...c });
   function siguienteCodigo(tipo) {
-    const p = tipo === "AFP" ? "AUX-" : "SOAT-";
+    const p = PREFIJO[tipo] || "AUX-";
     const n = Math.max(0, ...tramites().filter(t => String(t.codigo).startsWith(p)).map(t => +String(t.codigo).slice(p.length) || 0));
     return p + String(n + 1).padStart(3, "0");
   }
@@ -125,25 +128,62 @@
   const tipoTag = t => `<span class="chip" style="font-family:var(--mono)">${t}</span>`;
   const kpi = (l, v, s, cls = "") => `<div class="kpi" style="cursor:default"><span class="l">${l}</span><span class="v ${cls}">${v}</span><span class="s">${s}</span></div>`;
   const pos = v => v >= 0 ? "color:var(--ok)" : "color:var(--danger)";
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const sumar = (f, n) => { const d = new Date(f + "T12:00"); d.setDate(d.getDate() + n); return iso(d); };
+  const hora12 = h => { if (!h) return ""; const [H, M] = h.split(":").map(Number); return `${(H % 12) || 12}:${String(M).padStart(2, "0")} ${H < 12 ? "a. m." : "p. m."}`; };
+  const citasDe = T => { const l = []; T.forEach(t => (t.citas || []).forEach(c => l.push({ ...c, t }))); return l; };
+  const ordenCita = (a, b) => (a.fecha + (a.hora || "99")).localeCompare(b.fecha + (b.hora || "99"));
+  const tramitesFondo = () => tramites().filter(t => A.fondo === "ALL" || t.fondo === A.fondo);
+  const citasPronto = () => citasDe(tramitesFondo()).filter(c => c.estado === "Pendiente" && c.fecha <= sumar(hoy(), 7));
 
   function cabecera() {
-    const tabs = [["resumen", "Resumen"], ["tramites", "Trámites"], ["capital", "Capital y movimientos"], ["aliados", "Aliados"], ["parametros", "Parámetros"]];
-    const seg = [["ALL", "Todos"], ...cfg().fondos.map(f => [f.id, f.propio ? "Destreza" : f.nombre])]
+    const tabs = [["resumen", "Resumen"], ["tramites", "Trámites"], ["citas", "Citas"], ["capital", "Capital y movimientos"], ["aliados", "Aliados"], ["parametros", "Parámetros"]];
+    const nc = citasPronto().length;
+    return `<div class="page-head"><div><h1>Auxilios y pólizas</h1><p>Alianza Funeraria El Carmen · ${A.fondo === "ALL" ? "todos los fondos" : esc(fondo(A.fondo).nombre)}</p></div></div>
+      <div class="tabs ax-tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-ax="vista" data-v="${k}" aria-selected="${A.vista === k}">${t}${k === "citas" && nc ? ` <span class="chip num" style="margin-left:4px;color:var(--warn);background:var(--warn-soft);border-color:transparent">${nc}</span>` : ""}</button>`).join("")}</div>`;
+  }
+
+  /* La barra superior de la app (firmas, buscador de procesos, exportar, nuevo) se reemplaza por la de esta herramienta */
+  const ICO_INY = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>';
+  function montarBarra() {
+    if ($("#axSeg") || !$(".top") || !$("#firmSeg")) return;
+    const seg = document.createElement("div"); seg.className = "seg ax-top"; seg.id = "axSeg"; seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Fondo");
+    $("#firmSeg").after(seg);
+    const bus = document.createElement("div"); bus.className = "search ax-top";
+    bus.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="ax-q" type="search" placeholder="Buscar fallecido, cédula, código, entidad o factura" autocomplete="off" aria-label="Buscar en auxilios y pólizas"><kbd>/</kbd><div class="results" id="ax-res" hidden></div>`;
+    $(".top .search").after(bus);
+    $(".top-actions").insertAdjacentHTML("beforeend", `<button class="btn ax-top" data-ax="inyectar" id="axIny" title="Inyectar capital">${ICO_INY}<span class="lbl">Inyectar capital</span></button><button class="btn primary ax-top" data-ax="nuevo" id="axNew" title="Nuevo trámite"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Nuevo trámite</span></button>`);
+  }
+  function refrescarBarra() {
+    montarBarra(); const seg = $("#axSeg"); if (!seg) return;
+    seg.innerHTML = [["ALL", "Todos"], ...cfg().fondos.map(f => [f.id, f.propio ? "Destreza" : f.nombre])]
       .map(([id, n]) => `<button data-ax="fondo" data-f="${esc(id)}" aria-pressed="${A.fondo === id}">${id !== "ALL" ? dot(fondo(id).color) : ""}${esc(n)}</button>`).join("");
-    return `<div class="page-head"><div><h1>Auxilios funerarios</h1><p>Alianza Funeraria El Carmen · ${A.fondo === "ALL" ? "todos los fondos" : esc(fondo(A.fondo).nombre)}</p></div>
-      <div class="actions"><div class="seg">${seg}</div>${puede() ? `<button class="btn" data-ax="inyectar">Inyectar capital</button><button class="btn primary" data-ax="nuevo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nuevo trámite</button>` : ""}</div></div>
-      <div class="tabs" role="tablist" style="margin:-6px 0 18px;border-bottom:1px solid var(--line)">${tabs.map(([k, t]) => `<button role="tab" data-ax="vista" data-v="${k}" aria-selected="${A.vista === k}">${t}</button>`).join("")}</div>`;
+    ["#axIny", "#axNew"].forEach(k => { const b = $(k); if (b) b.hidden = !puede(); });
+    const q = $("#ax-q"); if (q && document.activeElement !== q && q.value !== A.filtro.q) q.value = A.filtro.q;
+  }
+  function marcar(on) { document.body.classList.toggle("ax-on", on); if (on) refrescarBarra(); else { const r = $("#ax-res"); if (r) r.hidden = true; } }
+  const enAux = () => !!(window.DL && DL.i && DL.i.view === "auxilios" && DL.Ct && DL.Ct());
+  const buscar = q => { q = q.trim().toLowerCase(); return !q ? [] : tramites().filter(t => [t.codigo, t.fallecido, t.cc, t.entidad, t.reclamante, t.factura, t.tipo].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), "es", { numeric: true })); };
+  function resultados() {
+    const r = $("#ax-res"), q = $("#ax-q"); if (!r || !q) return;
+    if (!q.value.trim() || A.vista === "tramites") { r.hidden = true; return; }
+    const l = buscar(q.value);
+    r.innerHTML = l.slice(0, 8).map(t => `<button data-ax="abrir" data-id="${esc(t.id)}" class="ax-res-i"><span><span class="mono" style="font-size:12px">${esc(t.codigo)}</span> · <b style="font-weight:500">${esc(t.fallecido)}</b><span class="faint" style="font-size:12px"> · ${esc(t.entidad)}</span></span>${estChip(t.estado)}</button>`).join("")
+      + (l.length > 8 ? `<button data-ax="ver-todos" class="faint" style="font-size:12.5px">Ver los ${l.length} resultados en Trámites</button>` : "")
+      || '<div class="empty" style="padding:14px">Sin resultados en auxilios y pólizas.</div>';
+    r.hidden = false;
   }
 
   /* ---------- vista principal (la llama la app) ---------- */
   function vista() {
     if (!window.DL || !DL.Ct()) return `<div class="panel"><div class="empty">No tienes acceso al módulo de auxilios funerarios.</div></div>`;
-    suscribir();
+    suscribir(); marcar(true);
     if (A.error === "permission-denied") return `<div class="notice">Falta habilitar el módulo en las reglas de la base de datos o no tienes permiso de honorarios.</div>`;
-    if (!(A.listo.t && A.listo.m && A.listo.c)) return `<div class="page-head"><div><h1>Auxilios funerarios</h1><p>Cargando…</p></div></div>`;
-    if (!tramites().length && !movs().length) return cabecera() + vacio();
-    const fn = { resumen: vResumen, tramites: vTramites, capital: vCapital, aliados: vAliados, parametros: vParametros }[A.vista] || vResumen;
-    return cabecera() + fn();
+    if (!(A.listo.t && A.listo.m && A.listo.c)) return `<div class="page-head"><div><h1>Auxilios y pólizas</h1><p>Cargando…</p></div></div>`;
+    if (!tramites().length && !movs().length) return `<div class="ax">${cabecera() + vacio()}</div>`;
+    const fn = { resumen: vResumen, tramites: vTramites, citas: vCitas, capital: vCapital, aliados: vAliados, parametros: vParametros }[A.vista] || vResumen;
+    return `<div class="ax">${cabecera() + fn()}</div>`;
   }
 
   function vacio() {
@@ -177,6 +217,8 @@
       if (d > 120 && ["Evaluación", "Documentación pendiente", "Lista para radicar"].includes(t.estado)) return [t, `${d} días con el capital invertido y aún sin radicar`, "warn"];
       return null;
     }).filter(Boolean).sort((a, b) => dias(b[0].fechaPago) - dias(a[0].fechaPago));
+    citasDe(m.T).filter(c => c.estado === "Pendiente" && c.fecha <= sumar(hoy(), 7)).sort(ordenCita).reverse()
+      .forEach(c => atn.unshift([c.t, `${c.fecha < hoy() ? "Cita vencida sin marcar" : c.fecha === hoy() ? "Cita HOY" : "Cita"}: ${c.motivo} · ${z(c.fecha)}${c.hora ? " " + hora12(c.hora) : ""}${c.lugar ? " · " + c.lugar : ""}`, c.fecha < hoy() ? "danger" : "warn"]));
     const fondosT = A.fondo === "ALL" ? cfg().fondos : cfg().fondos.filter(f => f.id === A.fondo);
     return `
     <div class="grid g-kpi">
@@ -198,7 +240,7 @@
         ${m.repartido ? `<div class="faint" style="font-size:12px">Utilidad ya repartida: <b>${L(m.repartido)}</b> (descontada del capital)</div>` : ""}
       </div></section>
       <section class="panel"><div class="panel-h"><h2>Trámites por estado</h2><span class="faint more" style="font-size:12px">Cantidad · capital invertido</span></div><div class="panel-b"><div class="bars">
-        ${orden.map(e => `<div class="bar-row" style="grid-template-columns:150px 1fr 92px;cursor:pointer" data-ax="filtrar" data-e="${esc(e)}" title="Ver trámites en este estado"><span>${estChip(e)}</span><div class="track"><div class="fill" style="width:${st[e].n / maxN * 100}%"></div></div><span class="n">${st[e].n} · ${W(st[e].v)}</span></div>`).join("") || '<div class="empty">Sin trámites.</div>'}
+        ${orden.map(e => `<div class="bar-row ax-bar" style="cursor:pointer" data-ax="filtrar" data-e="${esc(e)}" title="Ver trámites en este estado"><span>${estChip(e)}</span><div class="track"><div class="fill" style="width:${st[e].n / maxN * 100}%"></div></div><span class="n">${st[e].n} · ${W(st[e].v)}</span></div>`).join("") || '<div class="empty">Sin trámites.</div>'}
       </div></div></section>
     </div>
     <section class="panel"><div class="panel-h"><h2>Evolución del fondo</h2><span class="faint more" style="font-size:12px">Valor al cierre de cada mes: disponible + invertido</span></div><div class="panel-b">
@@ -217,36 +259,71 @@
   }
 
   function vTramites() {
-    const F = A.filtro, q = F.q.trim().toLowerCase();
-    const T = tramites().filter(t => A.fondo === "ALL" || t.fondo === A.fondo)
-      .filter(t => (!F.tipo || t.tipo === F.tipo) && (!F.estado || t.estado === F.estado) && (!q || [t.codigo, t.fallecido, t.cc, t.entidad, t.reclamante, t.factura].join(" ").toLowerCase().includes(q)))
-      .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), "es", { numeric: true }));
+    const F = A.filtro;
+    const T = (F.q.trim() ? buscar(F.q) : tramites().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), "es", { numeric: true })))
+      .filter(t => A.fondo === "ALL" || t.fondo === A.fondo)
+      .filter(t => (!F.tipo || t.tipo === F.tipo) && (!F.estado || t.estado === F.estado));
     const tot = T.reduce((s, t) => ({ p: s.p + (t.pago || 0), i: s.i + ingreso(t), u: s.u + util(t) }), { p: 0, i: 0, u: 0 });
     const todos = [...new Set([...ESTADOS.AFP, ...ESTADOS.SOAT, ...DESVIOS])];
+    const diasT = t => cerrado(t) ? (t.cobro ? dias(t.fechaPago, t.cobro.fecha) : "—") : dias(t.fechaPago);
+    const notaIng = t => t.cobro ? '<div style="font-size:12px;color:var(--ok)">cobrado</div>' : t.tipo !== "AFP" && t.indemn == null ? '<div class="faint" style="font-size:12px">estimado</div>' : "";
     return `<div class="filters">
-      <input class="f" id="ax-q" type="search" placeholder="Buscar fallecido, cédula, código, entidad o factura" value="${esc(F.q)}" style="flex:1;min-width:220px">
-      <select class="f" id="ax-ft"><option value="">AFP y SOAT</option><option ${F.tipo === "AFP" ? "selected" : ""}>AFP</option><option ${F.tipo === "SOAT" ? "selected" : ""}>SOAT</option></select>
+      ${F.q.trim() ? `<span class="chip" style="padding:4px 10px">Buscando «${esc(F.q.trim())}» <button class="btn sm ghost" data-ax="limpiar-q" style="padding:0 4px" aria-label="Quitar búsqueda">✕</button></span>` : ""}
+      <select class="f" id="ax-ft"><option value="">Todos los tipos</option>${TIPOS.map(x => `<option ${F.tipo === x ? "selected" : ""}>${x}</option>`).join("")}</select>
       <select class="f" id="ax-fe"><option value="">Todos los estados</option>${todos.map(e => `<option ${F.estado === e ? "selected" : ""}>${e}</option>`).join("")}</select>
     </div>
-    <section class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Código</th><th>Fallecido</th><th>Entidad</th><th>Fondo</th><th>Estado</th><th class="r">Pagado funeraria</th><th class="r">Ingreso esperado</th><th class="r">Utilidad</th><th class="r">Días</th></tr></thead><tbody>
-    ${T.map(t => `<tr data-ax="abrir" data-id="${esc(t.id)}" style="cursor:pointer"><td><span class="mono" style="font-size:12.5px;white-space:nowrap">${esc(t.codigo)}</span></td><td><b style="font-weight:500">${esc(t.fallecido)}</b><div class="faint" style="font-size:12px">${t.cc ? "C.C. " + nf.format(t.cc) : "Cédula por registrar"}</div></td><td>${esc(t.entidad)} ${tipoTag(t.tipo)}</td><td>${fondoTag(t.fondo)}</td><td>${estChip(t.estado)}</td><td class="r num" style="white-space:nowrap">${L(t.pago)}</td><td class="r num" style="white-space:nowrap">${L(ingreso(t))}${t.cobro ? '<div style="font-size:12px;color:var(--ok)">cobrado</div>' : t.tipo === "SOAT" && t.indemn == null ? '<div class="faint" style="font-size:12px">estimado</div>' : ""}</td><td class="r num" style="white-space:nowrap;${pos(util(t))}">${L(util(t))}</td><td class="r num">${cerrado(t) ? (t.cobro ? dias(t.fechaPago, t.cobro.fecha) : "—") : dias(t.fechaPago)}</td></tr>`).join("") || '<tr><td colspan="9"><div class="empty">No hay trámites con estos filtros.</div></td></tr>'}
-    </tbody>${T.length ? `<tfoot><tr><td colspan="5"><b>${T.length} trámites</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.p)}</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.i)}</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.u)}</b></td><td></td></tr></tfoot>` : ""}</table></div></section>`;
+    <section class="panel"><div class="tbl-wrap ax-tbl-d"><table class="tbl"><thead><tr><th>Código</th><th>Fallecido</th><th>Entidad</th><th>Fondo</th><th>Estado</th><th class="r">Pagado funeraria</th><th class="r">Ingreso esperado</th><th class="r">Utilidad</th><th class="r">Días</th></tr></thead><tbody>
+    ${T.map(t => `<tr data-ax="abrir" data-id="${esc(t.id)}" style="cursor:pointer"><td><span class="mono" style="font-size:12.5px;white-space:nowrap">${esc(t.codigo)}</span></td><td><b style="font-weight:500">${esc(t.fallecido)}</b><div class="faint" style="font-size:12px">${t.cc ? "C.C. " + nf.format(t.cc) : "Cédula por registrar"}</div></td><td>${esc(t.entidad)} ${tipoTag(t.tipo)}</td><td>${fondoTag(t.fondo)}</td><td>${estChip(t.estado)}</td><td class="r num" style="white-space:nowrap">${L(t.pago)}</td><td class="r num" style="white-space:nowrap">${L(ingreso(t))}${notaIng(t)}</td><td class="r num" style="white-space:nowrap;${pos(util(t))}">${L(util(t))}</td><td class="r num">${diasT(t)}</td></tr>`).join("") || '<tr><td colspan="9"><div class="empty">No hay trámites con estos filtros.</div></td></tr>'}
+    </tbody>${T.length ? `<tfoot><tr><td colspan="5"><b>${T.length} trámites</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.p)}</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.i)}</b></td><td class="r num" style="white-space:nowrap"><b>${L(tot.u)}</b></td><td></td></tr></tfoot>` : ""}</table></div>
+    <div class="ax-cards">${T.map(t => `<div class="ax-card" data-ax="abrir" data-id="${esc(t.id)}">
+        <div class="r1"><span class="mono" style="font-size:12px;color:var(--ink-2)">${esc(t.codigo)}</span>${estChip(t.estado)}</div>
+        <div class="nm">${esc(t.fallecido)}</div>
+        <div class="meta"><span>${esc(t.entidad)} ${tipoTag(t.tipo)}</span><span>${fondoTag(t.fondo)}</span><span>${t.cc ? "C.C. " + nf.format(t.cc) : "Sin cédula"}</span><span>${diasT(t)}${cerrado(t) && !t.cobro ? "" : " días"}</span></div>
+        <div class="nums"><div><span>Pagado</span><b>${W(t.pago)}</b></div><div><span>${t.cobro ? "Cobrado" : "Esperado"}</span><b>${W(ingreso(t))}</b></div><div><span>Utilidad</span><b style="${pos(util(t))}">${W(util(t))}</b></div></div>
+      </div>`).join("") || '<div class="empty">No hay trámites con estos filtros.</div>'}
+      ${T.length ? `<div class="ax-card ax-tot" style="cursor:default"><div class="r1"><b>${T.length} trámites</b></div><div class="nums"><div><span>Pagado</span><b>${W(tot.p)}</b></div><div><span>Esperado</span><b>${W(tot.i)}</b></div><div><span>Utilidad</span><b style="${pos(tot.u)}">${W(tot.u)}</b></div></div></div>` : ""}
+    </div></section>`;
+  }
+
+  /* ---------- citas (agenda propia de la herramienta) ---------- */
+  function filaCita(c, enFicha) {
+    const t = c.t, [y, mm, d] = c.fecha.split("-").map(Number), pend = c.estado === "Pendiente", venc = pend && c.fecha < hoy();
+    const chip = pend ? (venc ? estChip("No aprobado").replace("No aprobado", "Vencida") : c.fecha === hoy() ? '<span class="chip" style="color:var(--warn);background:var(--warn-soft);border-color:transparent">Hoy</span>' : '<span class="chip">Pendiente</span>')
+      : c.estado === "Cumplida" ? estChip("Aprobado").replace("Aprobado", "Cumplida") : '<span class="chip" style="text-decoration:line-through">Cancelada</span>';
+    const btns = pend && puede() ? `<div class="ax-cbtn"><button class="btn sm" data-ax="cita-ok" data-id="${esc(t.id)}" data-c="${esc(c.id)}">Cumplida</button><button class="btn sm ghost" data-ax="cita-x" data-id="${esc(t.id)}" data-c="${esc(c.id)}">Cancelar</button></div>` : "";
+    return `<div class="ax-cita" ${enFicha ? "" : `data-ax="abrir" data-id="${esc(t.id)}" style="cursor:pointer"`}>
+      <div class="ax-cal" style="${venc ? "border-color:var(--danger);color:var(--danger)" : ""}"><b>${d}</b><span>${MES[mm - 1]}${y !== ahora() ? " " + String(y).slice(2) : ""}</span></div>
+      <div style="min-width:0"><div style="font-weight:600">${esc(c.motivo)}${c.hora ? ` · ${hora12(c.hora)}` : ""}${enFicha ? "" : ` <span class="faint" style="font-weight:400">· <span class="mono" style="font-size:12px">${esc(t.codigo)}</span> ${esc(t.fallecido)}</span>`}</div>
+        <div class="faint" style="font-size:12.5px">${esc(t.entidad)}${c.lugar ? " · " + esc(c.lugar) : ""}${c.nota ? " · " + esc(c.nota) : ""}</div>${btns}</div>
+      <div>${chip}</div></div>`;
+  }
+  function vCitas() {
+    const l = citasDe(tramitesFondo()), h = hoy(), pend = l.filter(c => c.estado === "Pendiente").sort(ordenCita);
+    const grupo = (tit, x, extra = "") => x.length ? `<section class="panel"><div class="panel-h"><h2>${tit}</h2><span class="chip num">${x.length}</span>${extra}</div><div class="panel-b" style="padding-top:4px;padding-bottom:4px">${x.map(c => filaCita(c)).join("")}</div></section>` : "";
+    const hist = l.filter(c => c.estado !== "Pendiente").sort((a, b) => ordenCita(b, a)).slice(0, 30);
+    return `<div class="panel-h ax-ph" style="padding:0 0 14px;border:0"><div class="faint" style="font-size:13px">Citas que dan las AFP y demás entidades para radicar o entregar documentos. Se agendan aquí o desde la ficha del trámite.</div>${puede() ? `<div class="ax-btns"><button class="btn primary" data-ax="cita-modal">Agendar cita</button></div>` : ""}</div>
+      ${grupo("Vencidas sin marcar", pend.filter(c => c.fecha < h))}${grupo("Hoy", pend.filter(c => c.fecha === h))}${grupo("Próximas", pend.filter(c => c.fecha > h))}
+      ${pend.length ? "" : '<section class="panel"><div class="empty">No hay citas pendientes.</div></section>'}
+      ${grupo("Historial", hist)}`;
   }
 
   function vCapital() {
     const m = metricas(A.fondo);
     const M = [...m.M].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || ((b.valor > 0) - (a.valor > 0)) || String(a.ts || "").localeCompare(String(b.ts || "")));
     let saldo = 0; const filas = M.map(x => { saldo += x.valor; return { ...x, saldo }; }).reverse();
-    return `<div class="grid g-kpi" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    return `<div class="grid g-kpi ax-k4">
       ${kpi("Capital aportado", W(m.aportado), "Aportes + inyecciones")}
       ${kpi("Disponible", W(m.disponible), "Saldo del fondo")}
       ${kpi("Utilidad por repartir", W(m.porRepAliado + m.porRepDestreza), `Destreza ${W(m.porRepDestreza)} · aliados ${W(m.porRepAliado)}`)}
       ${kpi("Utilidad repartida", W(m.repartido), "Descontada del capital")}
     </div>
-    <section class="panel"><div class="panel-h"><h2>Movimientos del capital</h2>${puede() ? `<div style="margin-left:auto;display:flex;gap:8px"><button class="btn sm" data-ax="inyectar">Inyectar capital</button><button class="btn sm" data-ax="repartir">Repartir utilidad</button></div>` : ""}</div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Fondo</th><th>Detalle</th><th class="r">Valor</th><th class="r">Saldo</th>${admin() ? "<th></th>" : ""}</tr></thead><tbody>
+    <section class="panel"><div class="panel-h ax-ph"><h2>Movimientos del capital</h2>${puede() ? `<div class="ax-btns"><button class="btn sm" data-ax="inyectar">Inyectar capital</button><button class="btn sm" data-ax="repartir">Repartir utilidad</button></div>` : ""}</div>
+    <div class="tbl-wrap ax-tbl-d"><table class="tbl"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Fondo</th><th>Detalle</th><th class="r">Valor</th><th class="r">Saldo</th>${admin() ? "<th></th>" : ""}</tr></thead><tbody>
     ${filas.map(x => `<tr><td class="num" style="white-space:nowrap">${z(x.fecha)}</td><td>${TIPOMOV[x.tipo] || esc(x.tipo)}${x.benef ? `<div class="faint" style="font-size:12px">${x.benef === "aliado" ? "Al aliado" : "A Destreza"}</div>` : ""}</td><td>${fondoTag(x.fondo)}</td><td>${x.ref ? `<a href="#" data-ax="abrir" data-id="${esc(x.ref)}" class="mono" style="font-size:12px">${esc(x.ref)}</a> · ` : ""}${esc(x.nota || "")}</td><td class="r num" style="white-space:nowrap;${pos(x.valor)}">${L(x.valor)}</td><td class="r num" style="white-space:nowrap">${A.fondo === "ALL" ? "" : L(x.saldo)}</td>${admin() ? `<td class="r">${["aporte", "inyeccion", "reparto"].includes(x.tipo) ? `<button class="btn sm ghost" data-ax="borrar-mov" data-id="${esc(x.id)}" title="Eliminar movimiento">Eliminar</button>` : ""}</td>` : ""}</tr>`).join("") || `<tr><td colspan="7"><div class="empty">Sin movimientos.</div></td></tr>`}
-    </tbody></table></div>${A.fondo === "ALL" ? '<div class="panel-b faint" style="font-size:12px">Elija un fondo arriba para ver el saldo acumulado movimiento a movimiento.</div>' : ""}</section>
+    </tbody></table></div>
+    <div class="ax-cards">${filas.map(x => `<div class="ax-card" style="cursor:default"><div class="r1"><span><b style="font-weight:600">${TIPOMOV[x.tipo] || esc(x.tipo)}</b>${x.benef ? `<span class="faint" style="font-size:12px"> · ${x.benef === "aliado" ? "al aliado" : "a Destreza"}</span>` : ""}</span><b class="num" style="white-space:nowrap;${pos(x.valor)}">${L(x.valor)}</b></div>
+      <div class="meta" style="margin-top:4px"><span>${z(x.fecha)}</span><span>${fondoTag(x.fondo)}</span>${x.ref ? `<a href="#" data-ax="abrir" data-id="${esc(x.ref)}" class="mono" style="font-size:12px">${esc(x.ref)}</a>` : ""}${A.fondo === "ALL" ? "" : `<span>Saldo ${L(x.saldo)}</span>`}</div>
+      ${x.nota ? `<div class="faint" style="font-size:12px;margin-top:2px">${esc(x.nota)}</div>` : ""}${admin() && ["aporte", "inyeccion", "reparto"].includes(x.tipo) ? `<button class="btn sm ghost" data-ax="borrar-mov" data-id="${esc(x.id)}" style="margin-top:6px;padding-left:0">Eliminar</button>` : ""}</div>`).join("") || '<div class="empty">Sin movimientos.</div>'}</div>${A.fondo === "ALL" ? '<div class="panel-b faint" style="font-size:12px">Elija un fondo arriba para ver el saldo acumulado movimiento a movimiento.</div>' : ""}</section>
     <section class="panel"><div class="panel-b" style="font-size:13px;color:var(--ink-2)"><b>Reglas del capital.</b> Cada pago a la funeraria sale del disponible del fondo. Cada cobro regresa completo al fondo y queda disponible para comprar nuevos trámites. Repartir utilidad la descuenta del capital (cualquier valor hasta el saldo disponible). Las inyecciones no tienen límite.</div></section>`;
   }
 
@@ -274,14 +351,14 @@
       </tbody></table>
       ${puede() ? `<div style="display:flex;gap:8px"><button class="btn sm" data-ax="guardar-smmlv">Guardar cambios</button><button class="btn sm ghost" data-ax="agregar-anio">Agregar ${ys[ys.length - 1] + 1}</button></div>` : ""}
     </div></section>
-    <section class="panel"><div class="panel-h"><h2>Reclamaciones SOAT</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:12px">
+    <section class="panel"><div class="panel-h"><h2>Reclamaciones SOAT y ADRES</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:13px;color:var(--ink-2)">Por defecto la firma recibe el <b>${c.soatPct} %</b> de la indemnización y, si el trámite lo indica, el reembolso de lo pagado a la funeraria. Ambas cosas se ajustan en cada trámite. Mientras no se conoce la indemnización real se estima en <b>${c.soatDias} salarios mínimos diarios</b> del año del fallecimiento (${L(indemnEstimada({ ingreso: hoy() }))} en ${ahora()}).</div>
       <div class="fld"><label for="ax-ppct">% por defecto de la indemnización para la firma</label><input class="f" id="ax-ppct" type="number" step="0.5" value="${c.soatPct}" style="width:100px" ${puede() ? "" : "disabled"}></div>
       <div class="fld"><label for="ax-pdias">Salarios mínimos diarios para estimar</label><input class="f" id="ax-pdias" type="number" value="${c.soatDias}" style="width:100px" ${puede() ? "" : "disabled"}></div>
       ${puede() ? `<div><button class="btn sm" data-ax="guardar-soat">Guardar</button></div>` : ""}
     </div></section></div>
     <section class="panel"><div class="panel-h"><h2>Ruta de estados</h2></div><div class="panel-b" style="font-size:13px;color:var(--ink-2);line-height:1.8">
-      <b>AFP:</b> ${ESTADOS.AFP.join(" → ")}<br><b>SOAT:</b> ${ESTADOS.SOAT.join(" → ")}<br><b>Desvíos:</b> No aprobado → En demanda (cuando se demanda a la entidad) · Desistido (el trámite se cierra y lo pagado queda como pérdida).
+      <b>AFP:</b> ${ESTADOS.AFP.join(" → ")}<br><b>SOAT y ADRES:</b> ${ESTADOS.SOAT.join(" → ")}<br><b>Desvíos:</b> No aprobado → En demanda (cuando se demanda a la entidad) · Desistido (el trámite se cierra y lo pagado queda como pérdida).
     </div></section>`;
   }
 
@@ -315,10 +392,14 @@
             <input class="f" id="ax-nota" placeholder="Nota del cambio (opcional): radicado n.°, motivo, etc.">` : ""}
           ${t.cobro && admin() ? `<div><button class="btn sm ghost" data-ax="anular-cobro" style="color:var(--danger)">Anular el cobro</button></div>` : ""}
         </div></section>
+        ${(() => { const cs = citasDe([t]).sort((a, b) => ordenCita(b, a)), pend = cs.filter(c => c.estado === "Pendiente").length;
+          if (!cs.length && !ed) return "";
+          return `<section class="panel"><div class="panel-h ax-ph"><h2>Citas</h2>${pend ? `<span class="chip num">${pend} pendiente${pend > 1 ? "s" : ""}</span>` : ""}${ed ? `<div class="ax-btns"><button class="btn sm" data-ax="cita-modal" data-id="${esc(t.id)}">Agendar cita</button></div>` : ""}</div><div class="panel-b" style="padding-top:4px;padding-bottom:4px">
+            ${cs.map(c => filaCita(c, true)).join("") || `<div class="faint" style="font-size:13px;padding:10px 0">${t.tipo === "AFP" ? "Si la AFP asigna cita para radicar la reclamación, agéndela aquí." : "Sin citas."}</div>`}</div></section>`; })()}
         ${t.tipo === "AFP" ? `<section class="panel"><div class="panel-h"><h2>Valor del auxilio funerario</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
           <div style="font-size:13px;color:var(--ink-2)">Por regla general: <b>5 SMMLV = ${L(lo)}</b> (${anioSmmlv(ahora())}). Tope máximo: <b>10 SMMLV = ${L(hi)}</b>.</div>
           ${ed ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><input class="f" id="ax-valoraux" inputmode="numeric" placeholder="${nf.format(lo)}" value="${t.valorAux ? nf.format(t.valorAux) : ""}" style="width:180px"><button class="btn sm" data-ax="guardar-aux">Guardar valor</button>${t.valorAux ? '<button class="btn sm ghost" data-ax="aux-defecto">Volver a 5 SMMLV</button>' : ""}</div>` : ""}
-        </div></section>` : `<section class="panel"><div class="panel-h"><h2>Liquidación SOAT</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
+        </div></section>` : `<section class="panel"><div class="panel-h"><h2>Liquidación ${t.tipo}</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
           <div style="font-size:13px;color:var(--ink-2);line-height:1.7">${t.reembolso !== false ? `Reembolso de lo pagado a la funeraria: <b>${L(t.pago)}</b>` : `Sin reembolso de lo pagado a la funeraria (${L(t.pago)})`}<br>Indemnización ${t.indemn != null ? "real" : "estimada (" + cfg().soatDias + " SMDLV)"}: <b>${L(ind)}</b> × ${pctSoat(t)} % = <b>${L(Math.round(ind * pctSoat(t) / 100))}</b><br>El cliente debe entregar a la firma: <b>${L(ingreso(t))}</b></div>
           ${ed ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end">
             <div class="fld"><label for="ax-reemb">¿Se recupera lo pagado a la funeraria?</label><select class="f" id="ax-reemb"><option value="si" ${t.reembolso !== false ? "selected" : ""}>Sí, el cliente lo reembolsa</option><option value="no" ${t.reembolso === false ? "selected" : ""}>No, solo el %</option></select></div>
@@ -349,22 +430,25 @@
   const sel = (l, n, ops, v, wide) => `<div class="fld ${wide ? "wide" : ""}"><label for="ax-f-${n}">${l}</label><select id="ax-f-${n}" name="${n}">${ops.map(o => { const [val, txt] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(val)}" ${val === v ? "selected" : ""}>${esc(txt)}</option>`; }).join("")}</select></div>`;
   const acciones = (txt = "Guardar") => `<div class="form-actions"><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit">${txt}</button></div>`;
   const fondosOps = () => cfg().fondos.map(f => [f.id, f.nombre]);
-  const entidadCampo = (tipo, v) => tipo === "SOAT"
-    ? `<label for="ax-f-entidad">Aseguradora (SOAT)</label><input id="ax-f-entidad" name="entidad" value="${esc(v || "")}" placeholder="Ej. Seguros del Estado">`
+  const entidadCampo = (tipo, v) => tipo === "ADRES"
+    ? `<label for="ax-f-entidad">Entidad</label><input id="ax-f-entidad" name="entidad" value="ADRES" readonly>`
+    : tipo === "SOAT"
+    ? `<label for="ax-f-entidad">Aseguradora (SOAT)</label><input id="ax-f-entidad" name="entidad" value="${esc(v && v !== "ADRES" ? v : "")}" placeholder="Ej. Seguros del Estado">`
     : `<label for="ax-f-entidad">Entidad (AFP)</label><select id="ax-f-entidad" name="entidad">${ENT_AFP.map(e => `<option ${e === v ? "selected" : ""}>${e}</option>`).join("")}</select>`;
   const soatCampos = (t = {}) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 14px"><div class="fld"><label for="ax-f-reembolso">¿Se recupera lo pagado a la funeraria?</label><select id="ax-f-reembolso" name="reembolso"><option value="si" ${t.reembolso !== false ? "selected" : ""}>Sí, el cliente lo reembolsa</option><option value="no" ${t.reembolso === false ? "selected" : ""}>No, solo el %</option></select></div><div class="fld"><label for="ax-f-pctSoat">% de la indemnización para la firma</label><input id="ax-f-pctSoat" name="pctSoat" type="number" min="0" max="100" step="0.5" value="${t.pctSoat ?? cfg().soatPct}"></div></div>`;
 
   function fTramite(t) {
     const nuevo = !t; t = t || { fondo: A.fondo === "ALL" ? "DL" : A.fondo, tipo: "AFP", entidad: "Porvenir", fechaPago: hoy() };
     modal(`${mh(nuevo ? "Nuevo trámite" : "Editar " + esc(t.codigo))}<form id="axfrm" data-k="${nuevo ? "nuevo" : "editar"}" class="modal-form">
-      ${sel("Fondo que paga", "fondo", fondosOps(), t.fondo)}${nuevo ? sel("Tipo de reclamación", "tipo", ["AFP", "SOAT"], t.tipo) : `<div class="fld"><label>Tipo de reclamación</label><input value="${t.tipo}" disabled></div>`}
+      ${sel("Fondo que paga", "fondo", fondosOps(), t.fondo)}${nuevo || admin() ? sel("Tipo de reclamación", "tipo", TIPOS, t.tipo) : `<div class="fld"><label>Tipo de reclamación</label><input value="${t.tipo}" disabled></div>`}
       ${fld("Nombre del fallecido", "fallecido", t.fallecido || "", "text", "required", true)}
       ${fld("Cédula del fallecido", "cc", t.cc ? String(t.cc) : "", "text", 'inputmode="numeric"')}${fld("Fecha del fallecimiento", "fallecimiento", t.fallecimiento || "", "date")}
       <div class="fld" id="ax-w-ent">${entidadCampo(t.tipo, t.entidad)}</div>
       ${fld("Reclamante / beneficiario", "reclamante", t.reclamante || "")}${fld("Teléfono del reclamante", "telefono", t.telefono || "", "tel")}
       ${fld("Valor pagado a la funeraria", "pago", t.pago ? nf.format(t.pago) : "", "text", 'inputmode="numeric" required placeholder="5.700.000"')}${fld("Fecha del pago", "fechaPago", t.fechaPago || hoy(), "date", "required")}
       ${fld("N.° de factura de la funeraria", "factura", t.factura || "", "text", 'placeholder="Ej. FE17894"')}
-      <div class="fld wide" id="ax-w-soat" ${nuevo && t.tipo === "SOAT" ? "" : "hidden"}>${nuevo && t.tipo === "SOAT" ? soatCampos() : ""}</div>
+      <div class="fld wide" id="ax-w-soat" ${nuevo && t.tipo !== "AFP" ? "" : "hidden"}>${nuevo && t.tipo !== "AFP" ? soatCampos() : ""}</div>
+      ${!nuevo && admin() ? `<div class="fld wide faint" style="font-size:12px">Si cambia el tipo, el trámite recibe un código nuevo (por ejemplo SOAT-001 → ADRES-001) y sus movimientos se trasladan.</div>` : ""}
       <div class="fld wide" id="ax-w-cap"></div>${acciones(nuevo ? "Crear trámite" : "Guardar cambios")}</form>`);
     revisarCapital();
   }
@@ -404,9 +488,21 @@
       ${fld("Contacto", "contacto", f.contacto || "", "text", "", true)}${acciones(nuevo ? "Agregar" : "Guardar")}</form>`);
   }
 
+  function fCita(tid) {
+    const act = tramites().filter(t => !cerrado(t)).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), "es", { numeric: true }));
+    const t0 = tid && A.tramites[tid];
+    modal(`${mh("Agendar cita")}<form id="axfrm" data-k="cita" class="modal-form">
+      ${t0 ? `<input type="hidden" name="tramite" value="${esc(t0.id)}"><div class="fld wide"><label>Trámite</label><input value="${esc(t0.codigo + " · " + t0.fallecido + " (" + t0.entidad + ")")}" disabled></div>`
+        : sel("Trámite", "tramite", act.map(t => [t.id, `${t.codigo} · ${t.fallecido} (${t.entidad})`]), "", true)}
+      ${fld("Fecha", "fecha", "", "date", "required")}${fld("Hora", "hora", "", "time")}
+      ${sel("Motivo", "motivo", MOTIVOS, "Radicación")}${fld("Lugar o sede", "lugar", "", "text", 'placeholder="Ej. Porvenir sede Centro, virtual…"')}
+      ${fld("Nota", "nota", "", "text", 'placeholder="Ej. llevar registro civil de defunción original"', true)}
+      <div class="fld wide faint" style="font-size:12px">Al marcar como cumplida una cita de radicación, el trámite pasa a «Radicado» si aún no lo estaba.</div>${acciones("Agendar")}</form>`);
+  }
+
   /* ---------- importar del Excel actual ---------- */
   const normEnt = e => { const s = String(e || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-    if (!s) return "Otra"; if (s.includes("soat")) return "SOAT"; if (/porv|prov/.test(s)) return "Porvenir"; if (/colp/.test(s)) return "Colpensiones";
+    if (!s) return "Otra"; if (s.includes("adres")) return "ADRES"; if (s.includes("soat")) return "SOAT"; if (/porv|prov/.test(s)) return "Porvenir"; if (/colp/.test(s)) return "Colpensiones";
     if (/prote/.test(s)) return "Protección"; if (/colf/.test(s)) return "Colfondos"; if (/skan/.test(s)) return "Skandia"; if (/fomag/.test(s)) return "FOMAG"; return String(e).trim(); };
   const normEst = e => { const s = String(e || "").toLowerCase().trim();
     if (!s) return "Documentación pendiente"; if (s.includes("evalua")) return "Evaluación"; if (s.includes("document")) return "Documentación pendiente";
@@ -424,17 +520,17 @@
       const ix = k => cab.findIndex(c => c.includes(k));
       const c = { ing: ix("ingreso"), nom: ix("nombre"), cc: ix("cédula") >= 0 ? ix("cédula") : ix("cedula"), afp: ix("afp"), est: ix("estado"), pago: ix("pago funeraria"), fpago: ix("fecha pago"), frec: ix("fecha recaudo"), mrec: ix("monto recibido") };
       if (c.nom < 0 || c.pago < 0) { toast("No encontré las columnas del formato (Nombre Fallecido, Pago Funeraria)."); return; }
-      let nA = 0, nS = 0; const lista = [];
+      const cnt = { AFP: 0, SOAT: 0, ADRES: 0 }; const lista = [];
       filas.slice(1).forEach(r => {
         const nombre = String(r[c.nom] || "").trim(); if (!nombre) return;
-        const ent = normEnt(r[c.afp]), tipo = ent === "SOAT" ? "SOAT" : "AFP";
-        const codigo = tipo === "AFP" ? "AUX-" + String(++nA).padStart(3, "0") : "SOAT-" + String(++nS).padStart(3, "0");
+        const ent = normEnt(r[c.afp]), tipo = ent === "SOAT" || ent === "ADRES" ? ent : "AFP";
+        const codigo = PREFIJO[tipo] + String(++cnt[tipo]).padStart(3, "0");
         const pago = Math.round(+r[c.pago] || 0), ingreso = fechaX(r[c.ing]) || fechaX(r[c.fpago]) || hoy(), fechaPago = fechaX(r[c.fpago]) || ingreso;
-        let estado = normEst(r[c.est]); if (tipo === "SOAT" && estado === "Cobrado") estado = "Cliente pagó a la firma";
+        let estado = normEst(r[c.est]); if (tipo !== "AFP" && estado === "Cobrado") estado = "Cliente pagó a la firma";
         const recibido = c.mrec >= 0 ? Math.round(+r[c.mrec] || 0) : 0, frec = c.frec >= 0 ? fechaX(r[c.frec]) : "";
         lista.push({ codigo, tipo, fallecido: nombre.replace(/\s+/g, " ").replace(/\b\p{L}/gu, m => m.toUpperCase()), cc: +String(r[c.cc] || "").replace(/\D/g, "") || 0,
-          entidad: tipo === "SOAT" ? "Aseguradora por definir" : ent, pago, ingreso, fechaPago, estado: recibido ? (tipo === "AFP" ? "Cobrado" : "Cliente pagó a la firma") : estado,
-          cobro: recibido ? { valor: recibido, fecha: frec || hoy() } : null, reembolso: tipo === "SOAT" ? false : true });
+          entidad: tipo === "SOAT" ? "Aseguradora por definir" : tipo === "ADRES" ? "ADRES" : ent, pago, ingreso, fechaPago, estado: recibido ? (tipo === "AFP" ? "Cobrado" : "Cliente pagó a la firma") : estado,
+          cobro: recibido ? { valor: recibido, fecha: frec || hoy() } : null, reembolso: tipo === "AFP" });
       });
       if (!lista.length) { toast("El Excel no tiene trámites."); return; }
       A.imp = lista; fImportar();
@@ -447,7 +543,7 @@
       <div class="fld wide"><div class="tbl-wrap" style="max-height:300px;overflow:auto"><table class="tbl"><thead><tr><th>Código</th><th>Fallecido</th><th>Entidad</th><th>Estado</th><th class="r">Pagado</th></tr></thead><tbody>
       ${l.map(t => `<tr><td class="mono" style="font-size:12px;white-space:nowrap">${t.codigo}</td><td>${esc(t.fallecido)}</td><td>${esc(t.entidad)}</td><td>${estChip(t.estado)}</td><td class="r num" style="white-space:nowrap">${L(t.pago)}</td></tr>`).join("")}
       </tbody></table></div></div>
-      <div class="fld wide" style="font-size:13px;color:var(--ink-2)">${l.length} trámites · total pagado a la funeraria <b>${L(tot)}</b>. Ese total quedará como capital aportado, mes a mes según la fecha de cada pago. Los trámites SOAT se importan <b>sin reembolso</b> y con el ${cfg().soatPct} %; se ajustan en cada ficha. El número de factura se puede completar después en cada trámite.</div>
+      <div class="fld wide" style="font-size:13px;color:var(--ink-2)">${l.length} trámites · total pagado a la funeraria <b>${L(tot)}</b>. Ese total quedará como capital aportado, mes a mes según la fecha de cada pago. Los trámites SOAT y ADRES se importan <b>sin reembolso</b> y con el ${cfg().soatPct} %; se ajustan en cada ficha. El número de factura se puede completar después en cada trámite.</div>
       ${acciones("Importar " + l.length + " trámites")}</form>`);
   }
 
@@ -456,6 +552,7 @@
   const upd = (t, d) => col("auxTramites").doc(t.id).update(d);
 
   document.addEventListener("click", async ev => {
+    if (!ev.target.closest(".ax-top.search")) { const r = $("#ax-res"); if (r) r.hidden = true; }
     const a = ev.target.closest("[data-ax]"); if (!a || !window.DL) return;
     if (a.tagName === "A") ev.preventDefault();
     const act = a.dataset.ax, t = A.tramites[A.abierto];
@@ -463,7 +560,19 @@
       case "vista": A.vista = a.dataset.v; DL.U(); window.scrollTo(0, 0); break;
       case "fondo": A.fondo = a.dataset.f; DL.U(); break;
       case "filtrar": A.filtro.estado = a.dataset.e; A.vista = "tramites"; DL.U(); break;
-      case "abrir": A.abierto = a.dataset.id; ficha(); break;
+      case "abrir": { const r = $("#ax-res"); if (r) r.hidden = true; if (!A.tramites[a.dataset.id]) break; A.abierto = a.dataset.id; ficha(); break; }
+      case "ver-todos": A.vista = "tramites"; $("#ax-res").hidden = true; DL.U(); break;
+      case "limpiar-q": A.filtro.q = ""; $("#ax-q").value = ""; DL.U(); break;
+      case "cita-modal": fCita(a.dataset.id); break;
+      case "cita-ok": case "cita-x": {
+        const tt = A.tramites[a.dataset.id], c = tt && (tt.citas || []).find(x => x.id === a.dataset.c); if (!c) break;
+        if (act === "cita-x" && a.dataset.ok !== "1") { a.dataset.ok = "1"; a.textContent = "¿Cancelar? Toca otra vez"; break; }
+        const est = act === "cita-ok" ? "Cumplida" : "Cancelada", ruta = ESTADOS[tt.tipo] || ESTADOS.AFP;
+        const pasa = est === "Cumplida" && c.motivo === "Radicación" && ruta.indexOf(tt.estado) >= 0 && ruta.indexOf(tt.estado) < ruta.indexOf("Radicado");
+        const d = { citas: tt.citas.map(x => x.id === c.id ? { ...x, estado: est, cerrada: hoy() } : x), hist: hist(tt, `Cita ${est.toLowerCase()}`, hoy(), `${c.motivo} del ${z(c.fecha)}`) };
+        if (pasa) { d.estado = "Radicado"; d.hist = [...d.hist, { e: "Radicado", f: c.fecha, n: "Radicado en la cita", por: yo() }]; }
+        await guardar(() => upd(tt, d), pasa ? "Cita cumplida: el trámite pasó a Radicado" : "Cita " + est.toLowerCase(), `${tt.codigo}: cita ${est.toLowerCase()} (${c.motivo})`, tt.codigo); break;
+      }
       case "nuevo": fTramite(); break;
       case "editar": fTramite(t); break;
       case "inyectar": fInyectar(a.dataset.f); break;
@@ -511,15 +620,26 @@
     }
   });
   document.addEventListener("input", ev => {
-    if (ev.target.id === "ax-q") { A.filtro.q = ev.target.value; const p = ev.target.selectionStart; DL.U(); const i = $("#ax-q"); if (i) { i.focus(); i.setSelectionRange(p, p); } }
+    if (ev.target.id === "ax-q") { A.filtro.q = ev.target.value; if (A.vista === "tramites") DL.U(); resultados(); }
     if (ev.target.closest("#axfrm")) { revisarCapital(); revisarReparto(); }
   });
+  window.addEventListener("keydown", ev => {
+    if (!document.body.classList.contains("ax-on")) return;
+    const r = $("#ax-res");
+    if (ev.key === "Escape") {
+      if (r && !r.hidden) { r.hidden = true; return; }
+      if (!$("#layer2").innerHTML && $("#layer [data-aux]")) { ev.stopPropagation(); A.abierto = null; DL.we(); }
+      return;
+    }
+    if (ev.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { ev.preventDefault(); ev.stopPropagation(); const q = $("#ax-q"); q && q.focus(); return; }
+    if (ev.key === "Enter" && ev.target.id === "ax-q") { ev.preventDefault(); if (r) r.hidden = true; A.vista = "tramites"; DL.U(); }
+  }, true);
   document.addEventListener("change", ev => {
     const id = ev.target.id;
     if (id === "ax-ft") { A.filtro.tipo = ev.target.value; DL.U(); }
     if (id === "ax-fe") { A.filtro.estado = ev.target.value; DL.U(); }
     if (id === "ax-xlsx" && ev.target.files[0]) importar(ev.target.files[0]);
-    if (id === "ax-f-tipo") { const soat = ev.target.value === "SOAT"; $("#ax-w-ent").innerHTML = entidadCampo(ev.target.value, soat ? "" : "Porvenir"); const w = $("#ax-w-soat"); w.hidden = !soat; w.innerHTML = soat ? soatCampos() : ""; }
+    if (id === "ax-f-tipo") { const soat = ev.target.value !== "AFP"; $("#ax-w-ent").innerHTML = entidadCampo(ev.target.value, soat ? "" : "Porvenir"); const w = $("#ax-w-soat"); w.hidden = !soat; w.innerHTML = soat ? soatCampos() : ""; }
     if (ev.target.closest("#axfrm")) { revisarCapital(); revisarReparto(); }
   });
   document.addEventListener("submit", async ev => {
@@ -532,7 +652,7 @@
         const disp = metricas(d.fondo).disponible, codigo = siguienteCodigo(d.tipo);
         const doc = { codigo, fondo: d.fondo, tipo: d.tipo, fallecido: d.fallecido.trim(), cc: num(d.cc), entidad: d.entidad || "", ingreso: hoy(), fallecimiento: d.fallecimiento || "",
           pago, fechaPago: d.fechaPago, factura: (d.factura || "").trim(), estado: "Evaluación", reclamante: (d.reclamante || "").trim(), telefono: (d.telefono || "").trim(),
-          valorAux: null, indemn: null, cobro: null, reembolso: d.tipo === "SOAT" ? d.reembolso !== "no" : true, pctSoat: d.tipo === "SOAT" && d.pctSoat !== "" ? +d.pctSoat : null,
+          valorAux: null, indemn: null, cobro: null, reembolso: d.tipo !== "AFP" ? d.reembolso !== "no" : true, pctSoat: d.tipo !== "AFP" && d.pctSoat !== "" && d.pctSoat != null ? +d.pctSoat : null,
           hist: [{ e: "Evaluación", f: hoy(), n: "Trámite creado", por: yo() }], creado: new Date().toISOString() };
         ok = await guardar(async () => {
           if (pago > disp) await nuevoMov(d.fondo, "inyeccion", pago - Math.max(0, disp), d.fechaPago, { nota: "Inyección automática para cubrir el pago a la funeraria de " + codigo });
@@ -546,11 +666,35 @@
         const t = A.tramites[A.abierto], pago = num(d.pago); if (!pago) { toast("Escriba el valor pagado a la funeraria"); return; }
         const cambios = { fondo: d.fondo, fallecido: d.fallecido.trim(), cc: num(d.cc), entidad: d.entidad || "", fallecimiento: d.fallecimiento || "", pago, fechaPago: d.fechaPago,
           factura: (d.factura || "").trim(), reclamante: (d.reclamante || "").trim(), telefono: (d.telefono || "").trim() };
+        if (d.tipo && d.tipo !== t.tipo) {          // cambio de tipo: nuevo código y traslado de movimientos
+          const nc = siguienteCodigo(d.tipo), { id: _i, ...base } = t;
+          const doc = { ...base, ...cambios, tipo: d.tipo, codigo: nc, hist: hist(t, "Tipo cambiado", hoy(), `${t.codigo} (${t.tipo}) → ${nc} (${d.tipo})`) };
+          if (d.tipo === "AFP") Object.assign(doc, { reembolso: true, pctSoat: null, indemn: null });
+          else Object.assign(doc, { valorAux: null, entidad: d.tipo === "ADRES" ? "ADRES" : (t.tipo === "ADRES" ? "" : doc.entidad),
+            reembolso: d.reembolso ? d.reembolso !== "no" : t.tipo === "AFP" ? true : t.reembolso !== false, pctSoat: d.pctSoat ? +d.pctSoat : t.tipo === "AFP" ? null : (t.pctSoat ?? null) });
+          if (!ESTADOS[d.tipo].includes(doc.estado) && !DESVIOS.includes(doc.estado)) doc.estado = { "Pagado al cliente": "Aprobado", "Cliente pagó a la firma": "Cobrado", "Cobrado": "Cliente pagó a la firma" }[doc.estado] || doc.estado;
+          ok = await guardar(async () => {
+            await col("auxTramites").doc(nc).set(doc);
+            await col("auxMovs").doc("compra-" + nc).set({ fondo: d.fondo, tipo: "compra", valor: -pago, fecha: d.fechaPago, ts: (A.movs["compra-" + t.id] || {}).ts || new Date().toISOString(), ref: nc, nota: "Pago a la funeraria" + (cambios.factura ? " · factura " + cambios.factura : ""), por: yo() });
+            if (t.cobro) { const { id: _c, ...cm } = A.movs["cobro-" + t.id] || {}; await col("auxMovs").doc("cobro-" + nc).set({ ...cm, fondo: d.fondo, ref: nc }); await col("auxMovs").doc("cobro-" + t.id).delete(); }
+            await col("auxMovs").doc("compra-" + t.id).delete();
+            await col("auxTramites").doc(t.id).delete();
+          }, `${t.codigo} ahora es ${nc}`, `${t.codigo} cambió a ${nc} (${d.tipo})`, nc);
+          if (ok) { V(); if (A.tramites[nc]) { A.abierto = nc; ficha(); } else { A.abierto = null; A.esperar = nc; } }
+          return;
+        }
         ok = await guardar(async () => {
           await upd(t, { ...cambios, hist: hist(t, "Datos editados", hoy(), "") });
           await col("auxMovs").doc("compra-" + t.id).set({ fondo: d.fondo, tipo: "compra", valor: -pago, fecha: d.fechaPago, ts: (A.movs["compra-" + t.id] || {}).ts || new Date().toISOString(), ref: t.codigo, nota: "Pago a la funeraria" + (cambios.factura ? " · factura " + cambios.factura : ""), por: yo() });
           if (t.cobro && t.fondo !== d.fondo) await col("auxMovs").doc("cobro-" + t.id).update({ fondo: d.fondo });
         }, "Datos actualizados", `${t.codigo}: editó los datos`, t.codigo);
+        if (ok) V(); return;
+      }
+      if (k === "cita") {
+        const tt = A.tramites[d.tramite]; if (!tt) { toast("Elija el trámite"); return; } if (!d.fecha) { toast("Escriba la fecha de la cita"); return; }
+        const c = { id: "c" + Date.now().toString(36), fecha: d.fecha, hora: d.hora || "", motivo: d.motivo || "Radicación", lugar: (d.lugar || "").trim(), nota: (d.nota || "").trim(), estado: "Pendiente", por: yo(), creada: new Date().toISOString() };
+        ok = await guardar(() => upd(tt, { citas: [...(tt.citas || []), c], hist: hist(tt, "Cita agendada", hoy(), `${c.motivo}: ${z(c.fecha)}${c.hora ? " " + hora12(c.hora) : ""}${c.lugar ? " · " + c.lugar : ""}`) }),
+          "Cita agendada", `${tt.codigo}: cita de ${c.motivo.toLowerCase()} el ${z(c.fecha)}`, tt.codigo);
         if (ok) V(); return;
       }
       if (k === "inyeccion") { const v = num(d.valor); if (!v) { toast("Escriba el valor"); return; }
@@ -587,6 +731,58 @@
     } finally { if (!ok && btn) btn.disabled = false; }
   });
   const V = () => { $("#layer2").innerHTML = ""; };
+
+  const CSS = `
+body:not(.ax-on) .ax-top{display:none!important}
+body.ax-on #firmSeg,body.ax-on .top .search:not(.ax-top),body.ax-on #btnExport,body.ax-on #btnNew{display:none!important}
+.ax-top[hidden]{display:none!important}
+.ax-tabs{margin:14px 0 18px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.ax-tabs::-webkit-scrollbar{display:none}
+.ax-k4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ax-bar{grid-template-columns:150px minmax(0,1fr) 92px}
+.ax-cards{display:none}
+.ax-ph{flex-wrap:wrap}
+.ax-ph .ax-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.results .ax-res-i{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ax-cita{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 0;border-top:1px solid var(--line-2)}
+.ax-cita:first-child{border-top:0}
+.ax-cal{border:1px solid var(--line);border-radius:8px;text-align:center;padding:4px 0;background:var(--surface)}
+.ax-cal b{display:block;font-family:var(--serif);font-size:22px;line-height:1}
+.ax-cal span{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}
+.ax-cbtn{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+@media (max-width:1180px){.ax-k4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:860px){
+  .ax .ax-tbl-d{display:none}
+  .ax .ax-cards{display:block}
+  .ax-card{padding:14px 16px;border-bottom:1px solid var(--line-2);cursor:pointer}
+  .ax-card:last-child{border-bottom:0}
+  .ax-card .r1{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .ax-card .nm{font-weight:600;font-size:15.5px;margin:6px 0 3px;line-height:1.25}
+  .ax-card .meta{font-size:12.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:3px 12px;align-items:center}
+  .ax-card .nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+  .ax-card .nums span{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  .ax-card .nums b{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ax-tot{background:var(--surface-2)}
+  .ax .kpi{padding:12px 14px}
+  .ax .kpi .v{font-size:27px}
+  .ax .kpi .l{font-size:10px;letter-spacing:.08em}
+  .ax .page-head{margin-bottom:0}
+  .ax-ph .ax-btns{width:100%;margin-left:0}
+  .ax-ph .ax-btns .btn{flex:1 1 0;justify-content:center}
+  .ax-bar{grid-template-columns:minmax(0,1fr) 92px!important}
+  .ax-bar .track{display:none}
+  .ax-cita{grid-template-columns:46px minmax(0,1fr);}
+  .ax-cita>div:last-child{grid-column:2}
+  .drawer[data-aux] .money-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px}
+  .drawer[data-aux] .money{padding:10px}
+  .drawer[data-aux] .money b{font-size:20px}
+  .drawer[data-aux] .money span{font-size:11px!important}
+  .drawer[data-aux] #ax-estado{flex:1 1 100%}
+  .ax .cols .lab{font-size:8.5px!important;letter-spacing:-.02em}
+}`;
+  const st = document.createElement("style"); st.id = "ax-css"; st.textContent = CSS; document.head.appendChild(st);
+  const cont = $("#content");
+  if (cont) new MutationObserver(() => marcar(enAux())).observe(cont, { childList: true });
 
   window.AUX = { vista, abrir: id => { A.abierto = id; ficha(); } };
 })();

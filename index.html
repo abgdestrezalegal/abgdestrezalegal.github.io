@@ -63,6 +63,7 @@ function rotular(){document.querySelectorAll("#content table.tbl").forEach(funct
 t.querySelectorAll("tbody tr").forEach(function(tr){[].forEach.call(tr.children,function(td,i){if(td.colSpan>1||SIN.test(th[i]||""))return;if(td.getAttribute("data-label")!==th[i])td.setAttribute("data-label",th[i])})})})}
 var c=document.getElementById("content");if(c)new MutationObserver(rotular).observe(c,{childList:true,subtree:true});})();
 </script>
+<script src="auxilios.js" defer></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

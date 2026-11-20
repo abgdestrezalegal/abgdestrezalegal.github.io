@@ -328,8 +328,8 @@
   }
 
   function vAliados() {
-    return `${puede() ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn" data-ax="nuevo-aliado">Agregar aliado</button></div>` : ""}
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">${cfg().fondos.map(f => { const x = metricas(f.id); return `
+    return `${puede() ? `<div style="display:flex;justify-content:flex-end"><button class="btn" data-ax="nuevo-aliado">Agregar aliado</button></div>` : ""}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px">${cfg().fondos.map(f => { const x = metricas(f.id); return `
       <section class="panel"><div class="panel-h"><h2>${dot(f.color)}${esc(f.nombre)}</h2></div><div class="panel-b" style="display:flex;flex-direction:column;gap:12px">
         <div class="faint" style="font-size:12.5px">${f.propio ? "Fondo propio de Destreza Legal: toda la utilidad es de la firma." : `Aliado con capital propio. Recibe el <b>${f.pct} %</b> de la utilidad de sus trámites; Destreza el ${100 - f.pct} %.${f.contacto ? "<br>Contacto: " + esc(f.contacto) : ""}`}</div>
         <div class="money-grid" style="grid-template-columns:1fr 1fr">

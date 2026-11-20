@@ -732,6 +732,20 @@
   });
   const V = () => { $("#layer2").innerHTML = ""; };
 
+  /* Aviso de cita tocado en el celular: ?ir=auxilios[&tramite=ID] abre la pestaña Citas y, si es una sola, la ficha */
+  function irAux(u, enVivo) {
+    let q; try { q = new URL(u, location.href).searchParams; } catch { return; }
+    if (q.get("ir") !== "auxilios") return;
+    const id = q.get("tramite") || "";
+    A.vista = "citas"; A.esperar = id || null;
+    try { localStorage.setItem("dl.view", "auxilios"); sessionStorage.setItem("ax.ir", JSON.stringify({ t: Date.now(), id })); } catch {}
+    if (enVivo && window.DL) { DL.i.view = "auxilios"; DL.V(); DL.we(); DL.U(); window.scrollTo(0, 0);
+      if (id && A.tramites[id]) { A.abierto = id; A.esperar = null; ficha(); } }
+  }
+  if (/[?&]ir=auxilios/.test(location.search)) { irAux(location.href); history.replaceState(null, "", location.pathname); }
+  else try { const g = JSON.parse(sessionStorage.getItem("ax.ir") || "null"); if (g && Date.now() - g.t < 3e4) { A.vista = "citas"; A.esperar = g.id || null; } } catch {}
+  if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.tipo === "abrir") irAux(e.data.url, true); });
+
   const CSS = `
 body:not(.ax-on) .ax-top{display:none!important}
 body.ax-on #firmSeg,body.ax-on .top .search:not(.ax-top),body.ax-on #btnExport,body.ax-on #btnNew{display:none!important}

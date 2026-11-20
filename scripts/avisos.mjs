@@ -5,7 +5,7 @@
    con las APIs REST de Google. Las reglas viven en reglas.mjs, compartidas con la app.
 */
 import crypto from "node:crypto";
-import { avisosDelDia, resumenDiario } from "./reglas.mjs";
+import { avisosDelDia, avisosCitas, resumenDiario } from "./reglas.mjs";
 
 const SA = JSON.parse(process.env.FIREBASE_SA || "{}");
 const PID = SA.project_id;
@@ -102,16 +102,22 @@ async function main() {
   const hoy = hoyBogota();
   const [tareas, casosArr, tokens] = await Promise.all([leer(tk, "tareas"), leer(tk, "casos"), leer(tk, "tokens")]);
   const casos = Object.fromEntries(casosArr.map(c => [c.id, c]));
-  const av = avisosDelDia(tareas, casos, hoy);
+  // Citas de Auxilios y pólizas: si algo falla aquí, los avisos de la agenda salen igual.
+  let citas = [];
+  try { citas = avisosCitas(await leer(tk, "auxTramites"), hoy); } catch (e) { console.warn("No se pudieron leer las citas de auxilios."); }
+  const av = [...avisosDelDia(tareas, casos, hoy), ...citas]
+    .sort((a, b) => a.orden - b.orden || (a.fecha || "").localeCompare(b.fecha || ""));
 
   // Este repositorio es público y su registro también: solo se anotan cantidades,
   // nunca asuntos, clientes ni correos.
-  console.log(`${hoy} · ${tareas.length} tareas leídas · ${av.length} aviso(s) · ${tokens.length} dispositivo(s)`);
+  console.log(`${hoy} · ${tareas.length} tareas leídas · ${av.length} aviso(s), ${citas.length} de citas · ${tokens.length} dispositivo(s)`);
 
   const msg = resumenDiario(av, hoy);
   if (!msg) { console.log("Nada que avisar hoy."); return; }
   // Al tocar el aviso se abre la agenda en «Hoy»; si es un solo asunto, se resalta esa tarea.
-  msg.url = av.length === 1 ? `./?ir=agenda&tarea=${encodeURIComponent(av[0].id)}` : "./?ir=agenda";
+  // Si todo lo del día son citas de auxilios, se abre esa herramienta en la pestaña Citas.
+  if (av.every(a => a.aux)) msg.url = av.length === 1 ? `./?ir=auxilios&tramite=${encodeURIComponent(av[0].id)}` : "./?ir=auxilios";
+  else msg.url = av.length === 1 ? `./?ir=agenda&tarea=${encodeURIComponent(av[0].id)}` : "./?ir=agenda";
   if (SECO) { console.log("\n(Ensayo: no se envió nada.)"); return; }
   if (!tokens.length) { console.log("\nNo hay dispositivos registrados."); return; }
 
